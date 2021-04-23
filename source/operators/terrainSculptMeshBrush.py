@@ -47,15 +47,74 @@ batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
 class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
     
     radius : bpy.props.FloatProperty(
-        name="Radius", description="Radius of brush", default = 1, min=0, soft_max = 4
+        name = "Radius", 
+        description = "Radius of brush.", 
+        default = 1, 
+        min = 0, 
+        soft_max = 4
+    )
+    
+    inner_radius : bpy.props.FloatProperty(
+        name = "Inner Radius", 
+        description = "Inner Radius of brush.  Used to calculate hardness of brush edge.", 
+        default = 0, 
+        min = 0, 
+        max = 1
     )
 
     strength : bpy.props.FloatProperty(
-        name="Strength", description="Strength of brush", default = 1, min=0, soft_max = 4
+        name = "Strength", 
+        description = "Strength of brush.", 
+        default = 1, 
+        min = 0,
+        soft_max = 4
     )
 
     use_pressure : bpy.props.BoolProperty(
-        name="Pen Pressure", description="If true, pen pressure is used to adjust strength", default = False
+        name = "Pen Pressure", 
+        description = "If true, pen pressure is used to adjust strength.", 
+        default = False
+    )
+
+    terrain_origin : bpy.props.PointerProperty(
+        name = "Terrain Origin", 
+        description = "Defines the origin point for modes that depend on a distance from the origin.  World origin used if not set.", 
+        type = bpy.types.Object
+    )
+
+    brush_type : bpy.props.EnumProperty(
+        items=(
+            ('DRAW', "Draw", " terrain at the given height above the origin."),
+            ('ADD', "Add", "Add to current height."),
+            ('SUBTRACT', "Subtract", "Subtract from current height."),
+            ('FLATTEN', "Flatten", "Make terrain the same height as the spot where you first place your brush."),
+            ('RAMP', "Ramp", "Draw a ramp between where you press and release the mouse."),
+        ),
+        default='DRAW'
+    )
+
+    world_shape_type : bpy.props.EnumProperty(
+        items=(
+            ('FLAT', "Flat", "Terrain is flat and gravity points along -Z."),
+            ('SPHERE', "Sphere", "Terrain is sphere shaped (like a planet) and gravity points toward the origin."),
+        ),
+        default='FLAT'
+    )
+
+    draw_height : bpy.props.FloatProperty(
+        name = "Draw Height", 
+        description = "Distance above origin to draw terrain.", 
+        default = 1, 
+        soft_min = 0,
+        soft_max = 100
+    )
+
+    ramp_width : bpy.props.FloatProperty(
+        name = "Ramp Width", 
+        description = "The width of the ramp.", 
+        default = 1, 
+        min = 0,
+        soft_max = 10
     )
 
 #--------------------------------------
@@ -103,7 +162,7 @@ def draw_callback(self, context):
 
     #Draw cursor
     if self.show_cursor:
-        brush_radius = context.scene.uv_brush_props.radius
+        brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
     
         m = calc_vertex_transform_world(self.cursor_pos, self.cursor_normal);
         mS = mathutils.Matrix.Scale(brush_radius, 4)
@@ -159,7 +218,107 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         location = None
         normal = None
         index = None
+
+        if self.edit_object == None:
+            hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+#            print("<<1>>")
+        else:
+            l2w = self.edit_object.matrix_world
+            w2l = l2w.inverted()
+            local_ray_origin = w2l @ ray_origin
+#            local_ray_origin = l2w @ ray_origin
+#            local_ray_origin = ray_origin.copy()
+            local_view_vector = mul_vector(w2l, view_vector)
+
+            # print("l2w " + str(l2w))
+            # print("w2l " + str(w2l))
+            # print("ray_origin " + str(ray_origin))
+            # print("local_ray_origin " + str(local_ray_origin))
+            # print("view_vector " + str(view_vector))
+            # print("local_view_vector " + str(local_view_vector))
+            
+#            bpy.ops.object.transform_apply(location = False, rotation = True, scale = True)
         
+            if self.edit_object.mode == 'OBJECT':
+                hit_object, location, normal, index = self.edit_object.ray_cast(local_ray_origin, local_view_vector)
+                object = self.edit_object
+                
+                location = l2w @ location
+                
+#                print("<<2>>")
+            if self.edit_object.mode == 'EDIT':
+                bm = bmesh.from_edit_mesh(self.edit_object.data)
+                tree = mathutils.bvhtree.BVHTree.FromBMesh(bm)
+                location, normal, index, distance = tree.ray_cast(local_ray_origin, local_view_vector)
+                hit_object = location != None
+                object = self.edit_object
+                
+                location = l2w @ location
+#                print("<<3>>")
+
+        props = context.scene.terrain_sculpt_mesh_brush_props
+        brush_radius = props.radius
+        inner_radius = props.inner_radius
+        strength = props.strength
+        use_pressure = props.use_pressure
+        terrain_origin = props.terrain_origin
+        brush_type = props.brush_type
+        world_shape_type = props.world_shape_type
+        draw_height = props.draw_height
+        ramp_width = props.ramp_width
+    
+#        print("hit_object " + str(hit_object))
+        
+        if hit_object > 0:
+            
+            if self.edit_object == None:
+                self.edit_object = object
+#            print("--------Edit object uvs") 
+            
+            l2w = object.matrix_world
+            # n2w = l2w.copy()
+            # n2w.invert()
+            # n2w.transpose()
+#            print("Foo<<2>>")
+            
+            mesh = object.data
+            if self.edit_object.mode == 'EDIT':
+                bm = bmesh.from_edit_mesh(mesh)
+            elif self.edit_object.mode == 'OBJECT':
+                bm = bmesh.new()
+                bm.from_mesh(mesh)
+
+            if brush_type == 'DRAW':
+            
+#                print ("location " + str(location))
+                for v in bm.verts:
+
+                    wpos = l2w @ v.co
+                    dist = (wpos - location).magnitude
+                    if dist < brush_radius:
+                        frac = dist / brush_radius
+#                        offset_in_brush = 1 - dist / brush_radius
+                        atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
+                        
+                        atten *= strength
+                        if use_pressure:
+                            atten *= event.pressure
+                        
+                        wpos.z = lerp(wpos.z, draw_height, atten)
+                        v.co = w2l @ wpos
+            
+            
+
+            if self.edit_object.mode == 'EDIT':
+                bmesh.update_edit_mesh(mesh)
+            elif self.edit_object.mode == 'OBJECT':
+                bm.to_mesh(mesh)
+                bm.free()
+                
+            mesh.calc_normals()
+
+
+                    
     def mouse_move(self, context, event):
         mouse_pos = (event.mouse_region_x, event.mouse_region_y)
 
@@ -334,7 +493,7 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         layout = self.layout
 
         scene = context.scene
-        settings = scene.terrain_sculpt_mesh_brush_props
+        props = scene.terrain_sculpt_mesh_brush_props
         
 #        pcoll = preview_collections["main"]
         
@@ -342,11 +501,22 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         
         col = layout.column();
         #col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Mesh Brush", icon_value = pcoll["uvBrush"].icon_id)
-        col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Brush for Mesh")
+        col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Brush for Meshes")
         
-        col.prop(settings, "radius")
-        col.prop(settings, "strength")
-        col.prop(settings, "use_pressure")
+        col.prop(props, "radius")
+        col.prop(props, "inner_radius")
+        col.prop(props, "strength")
+        col.prop(props, "use_pressure")
+        col.prop(props, "terrain_origin")
+        col.prop(props, "brush_type", expand = True)
+        col.prop(props, "world_shape_type")
+        
+        if props.brush_type == 'DRAW':
+            col.prop(props, "draw_height")
+        
+        if props.brush_type == 'RAMP':
+            col.prop(props, "ramp_width")
+        
 
 
 #---------------------------
