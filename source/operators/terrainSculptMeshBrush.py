@@ -163,15 +163,31 @@ def draw_callback(self, context):
     #Draw cursor
     if self.show_cursor:
         brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
+        inner_radius = context.scene.terrain_sculpt_mesh_brush_props.inner_radius
     
         m = calc_vertex_transform_world(self.cursor_pos, self.cursor_normal);
+        
+        #outer
         mS = mathutils.Matrix.Scale(brush_radius, 4)
-        m = m @ mS
+        mCursor = m @ mS
     
         #Tangent to mesh
         gpu.matrix.push()
         
-        gpu.matrix.multiply_matrix(m)
+        gpu.matrix.multiply_matrix(mCursor)
+
+        shader.uniform_float("color", (1, 0, 1, 1))
+        batchCircle.draw(shader)
+        gpu.matrix.pop()
+
+        #inner
+        mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
+        mCursor = m @ mS
+    
+        #Tangent to mesh
+        gpu.matrix.push()
+        
+        gpu.matrix.multiply_matrix(mCursor)
 
         shader.uniform_float("color", (1, 0, 1, 1))
         batchCircle.draw(shader)
@@ -427,16 +443,26 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
         elif event.type in {'PAGE_UP', 'RIGHT_BRACKET'}:
             if event.value == "PRESS":
-                brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
-                brush_radius = brush_radius + .1
-                context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
+                if event.shift:
+                    brush_radius = context.scene.terrain_sculpt_mesh_brush_props.inner_radius
+                    brush_radius = brush_radius + .1
+                    context.scene.terrain_sculpt_mesh_brush_props.inner_radius = brush_radius
+                else:
+                    brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
+                    brush_radius = brush_radius + .1
+                    context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
             return {'RUNNING_MODAL'}
 
         elif event.type in {'PAGE_DOWN', 'LEFT_BRACKET'}:
             if event.value == "PRESS":
-                brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
-                brush_radius = max(brush_radius - .1, .1)
-                context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
+                if event.shift:
+                    brush_radius = context.scene.terrain_sculpt_mesh_brush_props.inner_radius
+                    brush_radius = max(brush_radius - .1, .1)
+                    context.scene.terrain_sculpt_mesh_brush_props.inner_radius = brush_radius
+                else:
+                    brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
+                    brush_radius = max(brush_radius - .1, .1)
+                    context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
             return {'RUNNING_MODAL'}
             
         elif event.type == 'ESC':
