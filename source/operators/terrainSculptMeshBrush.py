@@ -30,17 +30,18 @@ from bpy_extras import view3d_utils
 
 
 
-circleSegs = 64
-coordsCircle = [(math.sin(((2 * math.pi * i) / circleSegs)), math.cos((math.pi * 2 * i) / circleSegs), 0) for i in range(circleSegs + 1)]
+#circleSegs = 64
+#coordsCircle = [(math.sin(((2 * math.pi * i) / circleSegs)), math.cos((math.pi * 2 * i) / circleSegs), 0) for i in range(circleSegs + 1)]
 
-coordsNormal = [(0, 0, 0), (0, 0, 1)]
+#coordsNormal = [(0, 0, 0), (0, 0, 1)]
 
 vecZ = mathutils.Vector((0, 0, 1))
 vecX = mathutils.Vector((1, 0, 0))
 
 shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
-batchLine = batch_for_shader(shader, 'LINES', {"pos": coordsNormal})
+#batchLine = batch_for_shader(shader, 'LINES', {"pos": coordsNormal})
 batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
+batchSquare = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsSquare_strip})
 
 #--------------------------------------
 
@@ -160,9 +161,6 @@ def calc_vertex_transform_world(pos, norm):
 
 
 def draw_callback(self, context):
-#    if True:
-#        return
-
     ctx = bpy.context
 
     region = context.region
@@ -172,6 +170,12 @@ def draw_callback(self, context):
     view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, viewport_center)
     ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, viewport_center)
 
+    props = context.scene.terrain_sculpt_mesh_brush_props
+    brush_radius = props.radius
+    inner_radius = props.inner_radius
+    brush_type = props.brush_type
+    ramp_width = props.ramp_width
+
 
     shader.bind();
 
@@ -179,37 +183,63 @@ def draw_callback(self, context):
 
     #Draw cursor
     if self.show_cursor:
-        brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
-        inner_radius = context.scene.terrain_sculpt_mesh_brush_props.inner_radius
-    
-        m = calc_vertex_transform_world(self.cursor_pos, self.cursor_normal);
-        
-        #outer
-        mS = mathutils.Matrix.Scale(brush_radius, 4)
-        mCursor = m @ mS
-    
-        #Tangent to mesh
-        gpu.matrix.push()
-        
-        gpu.matrix.multiply_matrix(mCursor)
 
-        shader.uniform_float("color", (1, 0, 1, 1))
-        batchCircle.draw(shader)
-        gpu.matrix.pop()
+        if brush_type == 'RAMP':
+            if self.dragging:
+                ramp_start = self.start_location
+                ramp_span = self.cursor_pos - ramp_start
+                
+                if ramp_span.length_squared > .001:
+                    binormal = ramp_span.normalized()
+                    tangent = binormal.cross(vecZ)
+                    normal = tangent.cross(binormal)
+                    
+                    m = create_matrix(tangent, binormal, normal, self.start_location)
 
-        #inner
-        mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
-        mCursor = m @ mS
-    
-        #Tangent to mesh
-        gpu.matrix.push()
-        
-        gpu.matrix.multiply_matrix(mCursor)
+                    #m = calc_vertex_transform_world(self.start_location, normal);
+                    mS = mathutils.Matrix.Diagonal((ramp_width * 2, ramp_span.length, 1, 1))
+                    mT = mathutils.Matrix.Translation((-.5, 0, 0))
+                    
+                    mCursor = m @ mS @ mT
+                    
+                    
+                    gpu.matrix.push()
+                    
+                    gpu.matrix.multiply_matrix(mCursor)
 
-        shader.uniform_float("color", (1, 0, 1, 1))
-        batchCircle.draw(shader)
+                    shader.uniform_float("color", (1, 0, 1, 1))
+                    batchSquare.draw(shader)
+                    gpu.matrix.pop()
+                    
+        else:
+            m = calc_vertex_transform_world(self.cursor_pos, self.cursor_normal);
+            
+            #outer
+            mS = mathutils.Matrix.Scale(brush_radius, 4)
+            mCursor = m @ mS
         
-        gpu.matrix.pop()
+            #Tangent to mesh
+            gpu.matrix.push()
+            
+            gpu.matrix.multiply_matrix(mCursor)
+
+            shader.uniform_float("color", (1, 0, 1, 1))
+            batchCircle.draw(shader)
+            gpu.matrix.pop()
+
+            #inner
+            mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
+            mCursor = m @ mS
+        
+            #Tangent to mesh
+            gpu.matrix.push()
+            
+            gpu.matrix.multiply_matrix(mCursor)
+
+            shader.uniform_float("color", (1, 0, 1, 1))
+            batchCircle.draw(shader)
+            
+            gpu.matrix.pop()
 
 
     bgl.glDisable(bgl.GL_DEPTH_TEST)
@@ -424,35 +454,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             mesh.calc_normals()
 
 
-                    
-    def mouse_move(self, context, event):
-        mouse_pos = (event.mouse_region_x, event.mouse_region_y)
-
-        ctx = bpy.context
-
-        region = context.region
-        rv3d = context.region_data
-
-        view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
-        ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
-
-        viewlayer = bpy.context.view_layer
-        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
-        
-        #Brush cursor display
-        if result:
-            self.show_cursor = True
-            self.cursor_pos = location
-            self.cursor_normal = normal
-            self.cursor_object = object
-            self.cursor_matrix = matrix
-        else:
-            self.show_cursor = False
-
-        if self.dragging:
-            self.dab_brush(context, event)
-            pass
-
     def draw_ramp(self, context, event):
         mouse_pos = (event.mouse_region_x, event.mouse_region_y)
         region = context.region
@@ -468,6 +469,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             return
 
         props = context.scene.terrain_sculpt_mesh_brush_props
+        strength = props.strength
         ramp_width = props.ramp_width
         ramp_falloff = props.ramp_falloff
             
@@ -509,11 +511,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
                 
                 newWpos = wpos.copy()
-                newWpos.z = lerp(newWpos.z, ramp_height.z, attenParallel * attenPerp)
+                newWpos.z = lerp(newWpos.z, ramp_height.z, strength * attenParallel * attenPerp)
             
                 v.co = w2l @ newWpos
             
-
 
         if self.edit_object.mode == 'EDIT':
             bmesh.update_edit_mesh(mesh)
@@ -522,6 +523,36 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             bm.free()
             
         mesh.calc_normals()
+
+
+                    
+    def mouse_move(self, context, event):
+        mouse_pos = (event.mouse_region_x, event.mouse_region_y)
+
+        ctx = bpy.context
+
+        region = context.region
+        rv3d = context.region_data
+
+        view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
+        ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
+
+        viewlayer = bpy.context.view_layer
+        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        
+        #Brush cursor display
+        if result:
+            self.show_cursor = True
+            self.cursor_pos = location
+            self.cursor_normal = normal
+            self.cursor_object = object
+            self.cursor_matrix = matrix
+        else:
+            self.show_cursor = False
+
+        if self.dragging:
+            self.dab_brush(context, event)
+            pass
 
 
     def mouse_click(self, context, event):
