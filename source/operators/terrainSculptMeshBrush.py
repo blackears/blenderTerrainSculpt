@@ -125,6 +125,14 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         min = 0,
         soft_max = 10
     )
+    
+    ramp_falloff : bpy.props.FloatProperty(
+        name = "Ramp Falloff", 
+        description = "Softness of the edge of the ramp.", 
+        default = .2, 
+        min = 0, 
+        max = 1
+    )
 
 #--------------------------------------
 
@@ -461,6 +469,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
         props = context.scene.terrain_sculpt_mesh_brush_props
         ramp_width = props.ramp_width
+        ramp_falloff = props.ramp_falloff
             
         ramp_start = self.start_location
         ramp_span = location - self.start_location
@@ -489,9 +498,18 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_perp.length_squared < ramp_width * ramp_width:
                 frac = vert_parallel.length / ramp_span.length
                 ramp_height = ramp_start + ramp_span * frac
+                attenParallel = 1
+                if frac < ramp_falloff:
+                    attenParallel = frac / ramp_falloff
+                elif frac > 1 - ramp_falloff:
+                    attenParallel = (1 - frac) / ramp_falloff
+                    
+                
+                vert_perp_frac = vert_perp.length / ramp_width
+                attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
                 
                 newWpos = wpos.copy()
-                newWpos.z = ramp_height.z
+                newWpos.z = lerp(newWpos.z, ramp_height.z, attenParallel * attenPerp)
             
                 v.co = w2l @ newWpos
             
@@ -795,6 +813,7 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         
         if props.brush_type == 'RAMP':
             col.prop(props, "ramp_width")
+            col.prop(props, "ramp_falloff")
         
 
 
