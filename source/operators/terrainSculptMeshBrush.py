@@ -85,9 +85,9 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
 
     brush_type : bpy.props.EnumProperty(
         items=(
-            ('DRAW', "Draw", " terrain at the given height above the origin."),
-            ('ADD', "Add", "Add to current height."),
-            ('SUBTRACT', "Subtract", "Subtract from current height."),
+            ('DRAW', "Draw", "Draw terrain at the given height above the origin."),
+            ('ADD', "Add", "Add to terrain height."),
+            ('SUBTRACT', "Subtract", "Subtract from terrain height."),
             ('FLATTEN', "Flatten", "Make terrain the same height as the spot where you first place your brush."),
             ('SMOOTH', "Smooth", "Even out the terrain under the brush."),
             ('RAMP', "Ramp", "Draw a ramp between where you press and release the mouse."),
@@ -296,31 +296,18 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
         if self.edit_object == None:
             hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
-#            print("<<1>>")
         else:
             l2w = self.edit_object.matrix_world
             w2l = l2w.inverted()
             local_ray_origin = w2l @ ray_origin
-#            local_ray_origin = l2w @ ray_origin
-#            local_ray_origin = ray_origin.copy()
             local_view_vector = mul_vector(w2l, view_vector)
 
-            # print("l2w " + str(l2w))
-            # print("w2l " + str(w2l))
-            # print("ray_origin " + str(ray_origin))
-            # print("local_ray_origin " + str(local_ray_origin))
-            # print("view_vector " + str(view_vector))
-            # print("local_view_vector " + str(local_view_vector))
-            
-#            bpy.ops.object.transform_apply(location = False, rotation = True, scale = True)
-        
             if self.edit_object.mode == 'OBJECT':
                 hit_object, location, normal, index = self.edit_object.ray_cast(local_ray_origin, local_view_vector)
                 object = self.edit_object
                 
                 location = l2w @ location
                 
-#                print("<<2>>")
             if self.edit_object.mode == 'EDIT':
                 bm = bmesh.from_edit_mesh(self.edit_object.data)
                 tree = mathutils.bvhtree.BVHTree.FromBMesh(bm)
@@ -329,7 +316,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 object = self.edit_object
                 
                 location = l2w @ location
-#                print("<<3>>")
 
         props = context.scene.terrain_sculpt_mesh_brush_props
         brush_radius = props.radius
@@ -347,8 +333,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         if terrain_origin_obj != None:
             terrain_origin = terrain_origin_obj.matrix_world.translation
     
-#        print("hit_object " + str(hit_object))
-       
+        if event.shift:
+            #Shift key overrides for smooth mode
+            brush_type = 'SMOOTH'
+    
         if hit_object > 0:
             
             if self.edit_object == None:
@@ -378,7 +366,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     dist = (wpos - location).magnitude
                     if dist < brush_radius:
                         frac = dist / brush_radius
-#                        offset_in_brush = 1 - dist / brush_radius
                         atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
                         
                         atten *= strength
@@ -400,6 +387,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         weight_sum += atten
                         weighted_len_sum += len * atten
 
+                if weight_sum == 0:
+                    return
                 smooth_height = weighted_len_sum / weight_sum
 
             if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'FLATTEN', 'SMOOTH'):
@@ -436,9 +425,15 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         if brush_type == 'DRAW':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, draw_height, atten)
                         elif brush_type == 'ADD':
-                            new_offset = (wpos - offset_from_origin) + -down * (len + add_amount * atten)
+                            adjust = add_amount * atten
+                            if event.ctrl:
+                                adjust = -adjust
+                            new_offset = (wpos - offset_from_origin) + -down * (len + adjust)
                         elif brush_type == 'SUBTRACT':
-                            new_offset = (wpos - offset_from_origin) + -down * (len - add_amount * atten)
+                            adjust = add_amount * atten
+                            if event.ctrl:
+                                adjust = -adjust
+                            new_offset = (wpos - offset_from_origin) + -down * (len - adjust)
                         elif brush_type == 'FLATTEN':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
                         elif brush_type == 'SMOOTH':
@@ -671,7 +666,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     context.scene.terrain_sculpt_mesh_brush_props.inner_radius = brush_radius
                 else:
                     brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
-                    brush_radius = brush_radius + .1
+#                    brush_radius = brush_radius + .1
+                    brush_radius /= .8
                     context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
             return {'RUNNING_MODAL'}
 
@@ -683,7 +679,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     context.scene.terrain_sculpt_mesh_brush_props.inner_radius = brush_radius
                 else:
                     brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
-                    brush_radius = max(brush_radius - .1, .1)
+#                    brush_radius = max(brush_radius - .1, .1)
+                    brush_radius *= .8
                     context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
             return {'RUNNING_MODAL'}
             
@@ -854,7 +851,7 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         col.prop(props, "strength")
         col.prop(props, "use_pressure")
         col.prop(props, "terrain_origin")
-        col.prop(props, "brush_type", expand = True)
+        col.prop(props, "brush_type", expand = True, text = "Brush Type")
         col.prop(props, "world_shape_type", text = "Land Shape")
         
         if props.brush_type == 'DRAW':
