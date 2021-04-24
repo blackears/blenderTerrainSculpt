@@ -175,7 +175,12 @@ def draw_callback(self, context):
     inner_radius = props.inner_radius
     brush_type = props.brush_type
     ramp_width = props.ramp_width
+    world_shape_type = props.world_shape_type
+    terrain_origin_obj = props.terrain_origin
 
+    terrain_origin = vecZero.copy()
+    if terrain_origin_obj != None:
+        terrain_origin = terrain_origin_obj.matrix_world.translation
 
     shader.bind();
 
@@ -190,8 +195,15 @@ def draw_callback(self, context):
                 ramp_span = self.cursor_pos - ramp_start
                 
                 if ramp_span.length_squared > .001:
+
+                    if world_shape_type == 'FLAT':
+                        up = vecZ
+                    else:
+                        up = self.start_location - terrain_origin
+                        up.normalize()
+                                        
                     binormal = ramp_span.normalized()
-                    tangent = binormal.cross(vecZ)
+                    tangent = binormal.cross(up)
                     normal = tangent.cross(binormal)
                     
                     m = create_matrix(tangent, binormal, normal, self.start_location)
@@ -324,12 +336,12 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         inner_radius = props.inner_radius
         strength = props.strength
         use_pressure = props.use_pressure
-        terrain_origin_obj = props.terrain_origin
         brush_type = props.brush_type
         world_shape_type = props.world_shape_type
         draw_height = props.draw_height
         add_amount = props.add_amount
         ramp_width = props.ramp_width
+        terrain_origin_obj = props.terrain_origin
     
         terrain_origin = vecZero.copy()
         if terrain_origin_obj != None:
@@ -379,7 +391,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             offset_from_origin = offset_from_origin.project(vecZ)
                             down = -vecZ
                         else:
-                            down = offset_from_origin.normalized()
+                            down = -offset_from_origin.normalized()
                             
                         len = offset_from_origin.magnitude
                         if offset_from_origin.dot(down) > 0:
@@ -412,7 +424,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             offset_from_origin = offset_from_origin.project(vecZ)
                             down = -vecZ
                         else:
-                            down = offset_from_origin.normalized()
+                            down = -offset_from_origin.normalized()
                             
                         len = offset_from_origin.magnitude
                         if offset_from_origin.dot(down) > 0:
@@ -432,14 +444,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         elif brush_type == 'SMOOTH':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
 
-                        # if new_offset.z > 0 or True:
-                            # print("---")
-                            # print("atten " + str(atten))
-                            
-                            # print("len " + str(len))
-                            # print("wpos - offset_from_origin " + str(wpos - offset_from_origin))
-                            # print("new_offset " + str(new_offset))
-                        
                         v.co = w2l @ new_offset
             
                 
@@ -472,6 +476,14 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         strength = props.strength
         ramp_width = props.ramp_width
         ramp_falloff = props.ramp_falloff
+        world_shape_type = props.world_shape_type
+        terrain_origin_obj = props.terrain_origin
+
+    
+        terrain_origin = vecZero.copy()
+        if terrain_origin_obj != None:
+            terrain_origin = terrain_origin_obj.matrix_world.translation
+
             
         ramp_start = self.start_location
         ramp_span = location - self.start_location
@@ -510,8 +522,18 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 vert_perp_frac = vert_perp.length / ramp_width
                 attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
                 
-                newWpos = wpos.copy()
-                newWpos.z = lerp(newWpos.z, ramp_height.z, strength * attenParallel * attenPerp)
+                if world_shape_type == 'FLAT':
+                    down = -vecZ
+                else:
+                    down = wpos - terrain_origin
+                    down.normalize()
+                    
+#                newWpos = wpos.copy()
+#                newWpos.z = lerp(newWpos.z, ramp_height.z, strength * attenParallel * attenPerp)
+                
+                s = closest_point_to_line(wpos, down, ramp_start, ramp_span)
+                clamped_to_ramp = wpos + down * s
+                newWpos = lerp(wpos, clamped_to_ramp, strength * attenParallel * attenPerp)
             
                 v.co = w2l @ newWpos
             
