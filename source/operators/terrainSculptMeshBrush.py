@@ -88,6 +88,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
             ('ADD', "Add", "Add to current height."),
             ('SUBTRACT', "Subtract", "Subtract from current height."),
             ('FLATTEN', "Flatten", "Make terrain the same height as the spot where you first place your brush."),
+            ('SMOOTH', "Smooth", "Even out the terrain under the brush."),
             ('RAMP', "Ramp", "Draw a ramp between where you press and release the mouse."),
         ),
         default='DRAW'
@@ -209,7 +210,7 @@ def draw_callback(self, context):
 #-------------------------------------
 
 class TerrainSculptMeshOperator(bpy.types.Operator):
-    """Move uvs on your mesh by stroking a brush."""
+    """Sculpt your terrain using a brush."""
     bl_idname = "kitfox.terrain_sculpt_mesh_brush_operator"
     bl_label = "UV Brush"
     bl_options = {"REGISTER", "UNDO"}
@@ -227,7 +228,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         pass
 
 
-    def dab_brush(self, context, event):
+    def dab_brush(self, context, event, start_stroke = False):
         mouse_pos = (event.mouse_region_x, event.mouse_region_y)
         
         region = context.region
@@ -280,6 +281,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 location = l2w @ location
 #                print("<<3>>")
 
+        if start_stroke:
+            self.start_location = location.copy()
+
         props = context.scene.terrain_sculpt_mesh_brush_props
         brush_radius = props.radius
         inner_radius = props.inner_radius
@@ -289,6 +293,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         brush_type = props.brush_type
         world_shape_type = props.world_shape_type
         draw_height = props.draw_height
+        add_amount = props.add_amount
         ramp_width = props.ramp_width
     
         terrain_origin = vecZero.copy()
@@ -296,7 +301,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             terrain_origin = terrain_origin_obj.matrix_world.translation
     
 #        print("hit_object " + str(hit_object))
-        
+       
         if hit_object > 0:
             
             if self.edit_object == None:
@@ -316,7 +321,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
 
-            if brush_type == 'DRAW':
+            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'FLATTEN', 'SMOOTH'):
             
 #                print ("location " + str(location))
                 for v in bm.verts:
@@ -332,21 +337,44 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         if use_pressure:
                             atten *= event.pressure
                         
-                        
                         offset_from_origin = wpos - terrain_origin
                         if world_shape_type == 'FLAT':
 #                            print("world_shape_type " + str(world_shape_type))
                             offset_from_origin = offset_from_origin.project(vecZ)
+                            down = -vecZ
+                        else:
+                            down = offset_from_origin.normalized()
                             
                         len = offset_from_origin.magnitude
-#                        print("len " + str(len))
-                        if len < .0001:
-                            unit_offset = vecZ.copy()
-                        else:
-                            unit_offset = offset_from_origin / len
-#                        print("unit_offset " + str(unit_offset))
+                        if offset_from_origin.dot(down) > 0:
+                            len = -len
                             
-                        new_offset = (wpos - offset_from_origin) + unit_offset * lerp(len, draw_height, atten)
+                        if start_stroke:
+                            self.start_height = len
+                            
+                            
+                        # if len < .0001:
+                            # unit_offset = vecZ.copy()
+                        # else:
+                            # unit_offset = offset_from_origin / len
+#                        print("unit_offset " + str(unit_offset))
+                        
+                        if brush_type == 'DRAW':
+                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, draw_height, atten)
+                        elif brush_type == 'ADD':
+                            new_offset = (wpos - offset_from_origin) + -down * (len + add_amount * atten)
+                        elif brush_type == 'SUBTRACT':
+                            new_offset = (wpos - offset_from_origin) + -down * (len - add_amount * atten)
+                        elif brush_type == 'FLATTEN':
+                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
+
+                        if new_offset.z > 0 or True:
+                            print("---")
+                            print("atten " + str(atten))
+                            
+                            print("len " + str(len))
+                            print("wpos - offset_from_origin " + str(wpos - offset_from_origin))
+                            print("new_offset " + str(new_offset))
                         
 #                        wpos.z = lerp(wpos.z, draw_height, atten)
                         # elif world_shape_type == 'SPHERE':
@@ -416,7 +444,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             
             self.edit_object = object
             
-            self.dab_brush(context, event)
+            self.dab_brush(context, event, start_stroke = True)
             
             
         elif event.value == "RELEASE":
@@ -567,10 +595,17 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
             
             
             offset = location - terrain_origin
+            down = -offset
+            
             if world_shape_type == 'FLAT':
                 offset = offset.project(vecZ)
+                down = -vecZ
+                
+            len = offset.magnitude
+            if offset.dot(down) > 0:
+                len = -len
         
-            context.scene.terrain_sculpt_mesh_brush_props.draw_height = offset.magnitude
+            context.scene.terrain_sculpt_mesh_brush_props.draw_height = len
         
         
             context.scene.normal_brush_props.normal = normal
