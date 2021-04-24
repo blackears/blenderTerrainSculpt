@@ -534,58 +534,73 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         
         l2w = object.matrix_world
         w2l = l2w.inverted()
+
         
-        mesh = object.data
-        if object.mode == 'EDIT':
-            bm = bmesh.from_edit_mesh(mesh)
-        elif object.mode == 'OBJECT':
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
+        for obj in context.scene.objects:
+            if not obj.select_get():
+                continue
+            
+            l2w = obj.matrix_world
+            w2l = l2w.inverted()
+            
+            mesh = obj.data
+            if obj.mode == 'EDIT':
+                bm = bmesh.from_edit_mesh(mesh)
+            elif obj.mode == 'OBJECT':
+                bm = bmesh.new()
+                bm.from_mesh(mesh)
+        
+        # mesh = object.data
+        # if object.mode == 'EDIT':
+            # bm = bmesh.from_edit_mesh(mesh)
+        # elif object.mode == 'OBJECT':
+            # bm = bmesh.new()
+            # bm.from_mesh(mesh)
 
             
-        for v in bm.verts:
-            wpos = l2w @ v.co
-            
-            vert_offset = wpos - ramp_start
-            vert_parallel = vert_offset.project(ramp_span)
-            vert_perp = vert_offset - vert_parallel
-            
-            if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_perp.length_squared < ramp_width * ramp_width:
-                frac = vert_parallel.length / ramp_span.length
-                ramp_height = ramp_start + ramp_span * frac
-                attenParallel = 1
-                if frac < ramp_falloff:
-                    attenParallel = frac / ramp_falloff
-                elif frac > 1 - ramp_falloff:
-                    attenParallel = (1 - frac) / ramp_falloff
+            for v in bm.verts:
+                wpos = l2w @ v.co
+                
+                vert_offset = wpos - ramp_start
+                vert_parallel = vert_offset.project(ramp_span)
+                vert_perp = vert_offset - vert_parallel
+                
+                if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_perp.length_squared < ramp_width * ramp_width:
+                    frac = vert_parallel.length / ramp_span.length
+                    ramp_height = ramp_start + ramp_span * frac
+                    attenParallel = 1
+                    if frac < ramp_falloff:
+                        attenParallel = frac / ramp_falloff
+                    elif frac > 1 - ramp_falloff:
+                        attenParallel = (1 - frac) / ramp_falloff
+                        
                     
-                
-                vert_perp_frac = vert_perp.length / ramp_width
-                attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
-                
-                if world_shape_type == 'FLAT':
-                    down = -vecZ
-                else:
-                    down = wpos - terrain_origin
-                    down.normalize()
+                    vert_perp_frac = vert_perp.length / ramp_width
+                    attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
                     
-#                newWpos = wpos.copy()
-#                newWpos.z = lerp(newWpos.z, ramp_height.z, strength * attenParallel * attenPerp)
+                    if world_shape_type == 'FLAT':
+                        down = -vecZ
+                    else:
+                        down = wpos - terrain_origin
+                        down.normalize()
+                        
+    #                newWpos = wpos.copy()
+    #                newWpos.z = lerp(newWpos.z, ramp_height.z, strength * attenParallel * attenPerp)
+                    
+                    s = closest_point_to_line(wpos, down, ramp_start, ramp_span)
+                    clamped_to_ramp = wpos + down * s
+                    newWpos = lerp(wpos, clamped_to_ramp, strength * attenParallel * attenPerp)
                 
-                s = closest_point_to_line(wpos, down, ramp_start, ramp_span)
-                clamped_to_ramp = wpos + down * s
-                newWpos = lerp(wpos, clamped_to_ramp, strength * attenParallel * attenPerp)
-            
-                v.co = w2l @ newWpos
-            
+                    v.co = w2l @ newWpos
+                
 
-        if object.mode == 'EDIT':
-            bmesh.update_edit_mesh(mesh)
-        elif object.mode == 'OBJECT':
-            bm.to_mesh(mesh)
-            bm.free()
-            
-        mesh.calc_normals()
+            if obj.mode == 'EDIT':
+                bmesh.update_edit_mesh(mesh)
+            elif obj.mode == 'OBJECT':
+                bm.to_mesh(mesh)
+                bm.free()
+                
+            mesh.calc_normals()
 
 
                     
