@@ -281,9 +281,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 location = l2w @ location
 #                print("<<3>>")
 
-        if start_stroke:
-            self.start_location = location.copy()
-
         props = context.scene.terrain_sculpt_mesh_brush_props
         brush_radius = props.radius
         inner_radius = props.inner_radius
@@ -448,10 +445,69 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self.dab_brush(context, event)
             pass
 
+    def draw_ramp(self, context, event):
+        mouse_pos = (event.mouse_region_x, event.mouse_region_y)
+        region = context.region
+        rv3d = context.region_data
+
+        view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
+        ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
+
+        viewlayer = bpy.context.view_layer
+        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        
+        if not result or object.select_get() == False or object.type != 'MESH':
+            return
+
+        props = context.scene.terrain_sculpt_mesh_brush_props
+        ramp_width = props.ramp_width
+            
+        ramp_start = self.start_location
+        ramp_span = location - self.start_location
+    
+        if self.edit_object == None:
+            self.edit_object = object
+        
+        l2w = object.matrix_world
+        w2l = l2w.inverted()
+        
+        mesh = object.data
+        if self.edit_object.mode == 'EDIT':
+            bm = bmesh.from_edit_mesh(mesh)
+        elif self.edit_object.mode == 'OBJECT':
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+
+            
+        for v in bm.verts:
+            wpos = l2w @ v.co
+            
+            vert_offset = wpos - ramp_start
+            vert_parallel = vert_offset.project(ramp_span)
+            vert_perp = vert_offset - vert_parallel
+            
+            if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_perp.length_squared < ramp_width * ramp_width:
+                frac = vert_parallel.length / ramp_span.length
+                ramp_height = ramp_start + ramp_span * frac
+                
+                newWpos = wpos.copy()
+                newWpos.z = ramp_height.z
+            
+                v.co = w2l @ newWpos
+            
+
+
+        if self.edit_object.mode == 'EDIT':
+            bmesh.update_edit_mesh(mesh)
+        elif self.edit_object.mode == 'OBJECT':
+            bm.to_mesh(mesh)
+            bm.free()
+            
+        mesh.calc_normals()
+
 
     def mouse_click(self, context, event):
         if event.value == "PRESS":
-            
             mouse_pos = (event.mouse_region_x, event.mouse_region_y)
             region = context.region
             rv3d = context.region_data
@@ -462,18 +518,28 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             viewlayer = bpy.context.view_layer
             result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
 
+            
             if result == False or object.select_get() == False or object.type != 'MESH':
                 return {'PASS_THROUGH'}
                             
             self.dragging = True
             self.stroke_trail = []
+            self.start_location = location.copy()
             
             self.edit_object = object
             
             self.dab_brush(context, event, start_stroke = True)
+
             
             
         elif event.value == "RELEASE":
+            props = context.scene.terrain_sculpt_mesh_brush_props
+            brush_type = props.brush_type
+            
+            if brush_type == 'RAMP':
+                self.draw_ramp(context, event)
+        
+        
             self.dragging = False
             self.edit_object = None
             
