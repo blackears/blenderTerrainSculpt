@@ -30,18 +30,16 @@ from bpy_extras import view3d_utils
 
 
 
-#circleSegs = 64
-#coordsCircle = [(math.sin(((2 * math.pi * i) / circleSegs)), math.cos((math.pi * 2 * i) / circleSegs), 0) for i in range(circleSegs + 1)]
 
-#coordsNormal = [(0, 0, 0), (0, 0, 1)]
-
-vecZ = mathutils.Vector((0, 0, 1))
-vecX = mathutils.Vector((1, 0, 0))
+# vecZ = mathutils.Vector((0, 0, 1))
+# vecX = mathutils.Vector((1, 0, 0))
 
 shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
 #batchLine = batch_for_shader(shader, 'LINES', {"pos": coordsNormal})
 batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
 batchSquare = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsSquare_strip})
+
+brush_radius_increment = .9
 
 #--------------------------------------
 
@@ -294,28 +292,36 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         normal = None
         index = None
 
-        if self.edit_object == None:
-            hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
-        else:
-            l2w = self.edit_object.matrix_world
-            w2l = l2w.inverted()
-            local_ray_origin = w2l @ ray_origin
-            local_view_vector = mul_vector(w2l, view_vector)
+        hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        
+        if not hit_object or object.select_get() == False or object.type != 'MESH':
+            return
+        
+        # l2w = object.matrix_world
+        # w2l = l2w.inverted()
 
-            if self.edit_object.mode == 'OBJECT':
-                hit_object, location, normal, index = self.edit_object.ray_cast(local_ray_origin, local_view_vector)
-                object = self.edit_object
+        # if self.edit_object == None:
+            # hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        # else:
+            # l2w = self.edit_object.matrix_world
+            # w2l = l2w.inverted()
+            # local_ray_origin = w2l @ ray_origin
+            # local_view_vector = mul_vector(w2l, view_vector)
+
+            # if self.edit_object.mode == 'OBJECT':
+                # hit_object, location, normal, index = self.edit_object.ray_cast(local_ray_origin, local_view_vector)
+                # object = self.edit_object
                 
-                location = l2w @ location
+                # location = l2w @ location
                 
-            if self.edit_object.mode == 'EDIT':
-                bm = bmesh.from_edit_mesh(self.edit_object.data)
-                tree = mathutils.bvhtree.BVHTree.FromBMesh(bm)
-                location, normal, index, distance = tree.ray_cast(local_ray_origin, local_view_vector)
-                hit_object = location != None
-                object = self.edit_object
+            # if self.edit_object.mode == 'EDIT':
+                # bm = bmesh.from_edit_mesh(self.edit_object.data)
+                # tree = mathutils.bvhtree.BVHTree.FromBMesh(bm)
+                # location, normal, index, distance = tree.ray_cast(local_ray_origin, local_view_vector)
+                # hit_object = location != None
+                # object = self.edit_object
                 
-                location = l2w @ location
+                # location = l2w @ location
 
         props = context.scene.terrain_sculpt_mesh_brush_props
         brush_radius = props.radius
@@ -337,29 +343,35 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             #Shift key overrides for smooth mode
             brush_type = 'SMOOTH'
     
-        if hit_object > 0:
+#        if hit_object > 0:
             
-            if self.edit_object == None:
-                self.edit_object = object
+        # if self.edit_object == None:
+            # self.edit_object = object
 #            print("--------Edit object uvs") 
-            
-            l2w = object.matrix_world
-            # n2w = l2w.copy()
-            # n2w.invert()
-            # n2w.transpose()
+        
+#        l2w = object.matrix_world
+        # n2w = l2w.copy()
+        # n2w.invert()
+        # n2w.transpose()
 #            print("Foo<<2>>")
-            
-            mesh = object.data
-            if self.edit_object.mode == 'EDIT':
-                bm = bmesh.from_edit_mesh(mesh)
-            elif self.edit_object.mode == 'OBJECT':
-                bm = bmesh.new()
-                bm.from_mesh(mesh)
-
-            if brush_type == 'SMOOTH':
-                weight_sum = 0
-                weighted_len_sum = 0
+        
+        if brush_type == 'SMOOTH':
+            weight_sum = 0
+            weighted_len_sum = 0
                 
+            for obj in context.scene.objects:
+                if not obj.select_get():
+                    continue
+                
+                l2w = obj.matrix_world
+            
+                mesh = obj.data
+                if obj.mode == 'EDIT':
+                    bm = bmesh.from_edit_mesh(mesh)
+                elif obj.mode == 'OBJECT':
+                    bm = bmesh.new()
+                    bm.from_mesh(mesh)
+
                 for v in bm.verts:
 
                     wpos = l2w @ v.co
@@ -374,7 +386,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         
                         offset_from_origin = wpos - terrain_origin
                         if world_shape_type == 'FLAT':
-#                            print("world_shape_type " + str(world_shape_type))
+    #                            print("world_shape_type " + str(world_shape_type))
                             offset_from_origin = offset_from_origin.project(vecZ)
                             down = -vecZ
                         else:
@@ -387,20 +399,46 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         weight_sum += atten
                         weighted_len_sum += len * atten
 
-                if weight_sum == 0:
-                    return
-                smooth_height = weighted_len_sum / weight_sum
+    #            if obj.mode == 'EDIT':
+    #                bmesh.update_edit_mesh(mesh)
+                if obj.mode == 'OBJECT':
+    #                bm.to_mesh(mesh)
+                    bm.free()
+                
+            if weight_sum == 0:
+                return
+            smooth_height = weighted_len_sum / weight_sum
+
+
+
+        
+        for obj in context.scene.objects:
+            if not obj.select_get():
+                continue
+            
+            l2w = obj.matrix_world
+            w2l = l2w.inverted()
+            
+            mesh = obj.data
+            if obj.mode == 'EDIT':
+                bm = bmesh.from_edit_mesh(mesh)
+            elif obj.mode == 'OBJECT':
+                bm = bmesh.new()
+                bm.from_mesh(mesh)
+
+#            print("=====")
+#            print ("obj.name " + str(obj.name))
 
             if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'FLATTEN', 'SMOOTH'):
             
-#                print ("location " + str(location))
+    #                print ("location " + str(location))
                 for v in bm.verts:
 
                     wpos = l2w @ v.co
                     dist = (wpos - location).magnitude
                     if dist < brush_radius:
                         frac = dist / brush_radius
-#                        offset_in_brush = 1 - dist / brush_radius
+    #                        offset_in_brush = 1 - dist / brush_radius
                         atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
                         
                         atten *= strength
@@ -409,7 +447,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         
                         offset_from_origin = wpos - terrain_origin
                         if world_shape_type == 'FLAT':
-#                            print("world_shape_type " + str(world_shape_type))
+    #                            print("world_shape_type " + str(world_shape_type))
                             offset_from_origin = offset_from_origin.project(vecZ)
                             down = -vecZ
                         else:
@@ -421,6 +459,14 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             
                         if start_stroke:
                             self.start_height = len
+
+                        # print("---")
+                        # print("wpos " + str(wpos))
+                        # print("offset_from_origin " + str(offset_from_origin))
+                        # print("down " + str(down))
+                        # print("len " + str(len))
+                        # print("draw_height " + str(draw_height))
+                        # print("atten " + str(atten))
                             
                         if brush_type == 'DRAW':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, draw_height, atten)
@@ -444,9 +490,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 
                 
 
-            if self.edit_object.mode == 'EDIT':
+            if obj.mode == 'EDIT':
                 bmesh.update_edit_mesh(mesh)
-            elif self.edit_object.mode == 'OBJECT':
+            elif obj.mode == 'OBJECT':
                 bm.to_mesh(mesh)
                 bm.free()
                 
@@ -483,16 +529,16 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ramp_start = self.start_location
         ramp_span = location - self.start_location
     
-        if self.edit_object == None:
-            self.edit_object = object
+        # if self.edit_object == None:
+            # self.edit_object = object
         
         l2w = object.matrix_world
         w2l = l2w.inverted()
         
         mesh = object.data
-        if self.edit_object.mode == 'EDIT':
+        if object.mode == 'EDIT':
             bm = bmesh.from_edit_mesh(mesh)
-        elif self.edit_object.mode == 'OBJECT':
+        elif object.mode == 'OBJECT':
             bm = bmesh.new()
             bm.from_mesh(mesh)
 
@@ -533,9 +579,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 v.co = w2l @ newWpos
             
 
-        if self.edit_object.mode == 'EDIT':
+        if object.mode == 'EDIT':
             bmesh.update_edit_mesh(mesh)
-        elif self.edit_object.mode == 'OBJECT':
+        elif object.mode == 'OBJECT':
             bm.to_mesh(mesh)
             bm.free()
             
@@ -592,7 +638,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self.stroke_trail = []
             self.start_location = location.copy()
             
-            self.edit_object = object
+#            self.edit_object = object
             
             self.dab_brush(context, event, start_stroke = True)
 
@@ -607,7 +653,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         
         
             self.dragging = False
-            self.edit_object = None
+#            self.edit_object = None
             
 #            self.history_snapshot(context)
 
@@ -667,7 +713,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 else:
                     brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
 #                    brush_radius = brush_radius + .1
-                    brush_radius /= .8
+                    brush_radius /= brush_radius_increment
                     context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
             return {'RUNNING_MODAL'}
 
@@ -680,7 +726,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 else:
                     brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
 #                    brush_radius = max(brush_radius - .1, .1)
-                    brush_radius *= .8
+                    brush_radius *= brush_radius_increment
                     context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
             return {'RUNNING_MODAL'}
             
