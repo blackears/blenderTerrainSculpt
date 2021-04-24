@@ -321,6 +321,40 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
 
+            if brush_type == 'SMOOTH':
+                weight_sum = 0
+                weighted_len_sum = 0
+                
+                for v in bm.verts:
+
+                    wpos = l2w @ v.co
+                    dist = (wpos - location).magnitude
+                    if dist < brush_radius:
+                        frac = dist / brush_radius
+#                        offset_in_brush = 1 - dist / brush_radius
+                        atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
+                        
+                        atten *= strength
+                        if use_pressure:
+                            atten *= event.pressure
+                        
+                        offset_from_origin = wpos - terrain_origin
+                        if world_shape_type == 'FLAT':
+#                            print("world_shape_type " + str(world_shape_type))
+                            offset_from_origin = offset_from_origin.project(vecZ)
+                            down = -vecZ
+                        else:
+                            down = offset_from_origin.normalized()
+                            
+                        len = offset_from_origin.magnitude
+                        if offset_from_origin.dot(down) > 0:
+                            len = -len
+                            
+                        weight_sum += atten
+                        weighted_len_sum += len * atten
+
+                smooth_height = weighted_len_sum / weight_sum
+
             if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'FLATTEN', 'SMOOTH'):
             
 #                print ("location " + str(location))
@@ -352,13 +386,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         if start_stroke:
                             self.start_height = len
                             
-                            
-                        # if len < .0001:
-                            # unit_offset = vecZ.copy()
-                        # else:
-                            # unit_offset = offset_from_origin / len
-#                        print("unit_offset " + str(unit_offset))
-                        
                         if brush_type == 'DRAW':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, draw_height, atten)
                         elif brush_type == 'ADD':
@@ -367,22 +394,21 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             new_offset = (wpos - offset_from_origin) + -down * (len - add_amount * atten)
                         elif brush_type == 'FLATTEN':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
+                        elif brush_type == 'SMOOTH':
+                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
 
-                        if new_offset.z > 0 or True:
-                            print("---")
-                            print("atten " + str(atten))
+                        # if new_offset.z > 0 or True:
+                            # print("---")
+                            # print("atten " + str(atten))
                             
-                            print("len " + str(len))
-                            print("wpos - offset_from_origin " + str(wpos - offset_from_origin))
-                            print("new_offset " + str(new_offset))
-                        
-#                        wpos.z = lerp(wpos.z, draw_height, atten)
-                        # elif world_shape_type == 'SPHERE':
-                            # pass
+                            # print("len " + str(len))
+                            # print("wpos - offset_from_origin " + str(wpos - offset_from_origin))
+                            # print("new_offset " + str(new_offset))
                         
                         v.co = w2l @ new_offset
             
-            
+                
+                
 
             if self.edit_object.mode == 'EDIT':
                 bmesh.update_edit_mesh(mesh)
