@@ -109,6 +109,14 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         soft_max = 100
     )
 
+    add_amount : bpy.props.FloatProperty(
+        name = "Add Amount", 
+        description = "Amount to add or subtract when those modes are used.", 
+        default = 1, 
+        soft_min = 0,
+        soft_max = 100
+    )
+
     ramp_width : bpy.props.FloatProperty(
         name = "Ramp Width", 
         description = "The width of the ramp.", 
@@ -277,11 +285,15 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         inner_radius = props.inner_radius
         strength = props.strength
         use_pressure = props.use_pressure
-        terrain_origin = props.terrain_origin
+        terrain_origin_obj = props.terrain_origin
         brush_type = props.brush_type
         world_shape_type = props.world_shape_type
         draw_height = props.draw_height
         ramp_width = props.ramp_width
+    
+        terrain_origin = vecZero.copy()
+        if terrain_origin_obj != None:
+            terrain_origin = terrain_origin_obj.matrix_world.translation
     
 #        print("hit_object " + str(hit_object))
         
@@ -320,8 +332,27 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         if use_pressure:
                             atten *= event.pressure
                         
-                        wpos.z = lerp(wpos.z, draw_height, atten)
-                        v.co = w2l @ wpos
+                        
+                        offset_from_origin = wpos - terrain_origin
+                        if world_shape_type == 'FLAT':
+#                            print("world_shape_type " + str(world_shape_type))
+                            offset_from_origin = offset_from_origin.project(vecZ)
+                            
+                        len = offset_from_origin.magnitude
+#                        print("len " + str(len))
+                        if len < .0001:
+                            unit_offset = vecZ.copy()
+                        else:
+                            unit_offset = offset_from_origin / len
+#                        print("unit_offset " + str(unit_offset))
+                            
+                        new_offset = (wpos - offset_from_origin) + unit_offset * lerp(len, draw_height, atten)
+                        
+#                        wpos.z = lerp(wpos.z, draw_height, atten)
+                        # elif world_shape_type == 'SPHERE':
+                            # pass
+                        
+                        v.co = w2l @ new_offset
             
             
 
@@ -496,6 +527,96 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         else:
             self.report({'WARNING'}, "View3D not found, cannot run operator")
             return {'CANCELLED'}
+#---------------------------
+
+class TerrainHeightPickerMeshOperator(bpy.types.Operator):
+    """Pick Terrain Height"""
+    bl_idname = "kitfox.terrain_height_picker_mesh"
+    bl_label = "Pick Normal"
+    bl_options = {"REGISTER", "UNDO"}
+    
+    def __init__(self):
+        self.picking = False
+
+    def mouse_down(self, context, event):
+        mouse_pos = (event.mouse_region_x, event.mouse_region_y)
+
+        ctx = bpy.context
+
+        region = context.region
+        rv3d = context.region_data
+
+        view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
+        ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
+
+
+        viewlayer = bpy.context.view_layer
+        #result, location, normal, index, object, matrix = ray_cast(context, viewlayer, ray_origin, view_vector)
+
+        hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        
+        if hit_object:
+            #object.matrix_world @ 
+            props = context.scene.terrain_sculpt_mesh_brush_props
+            terrain_origin_obj = props.terrain_origin
+            world_shape_type = props.world_shape_type
+        
+            terrain_origin = vecZero.copy()
+            if terrain_origin_obj != None:
+                terrain_origin = terrain_origin_obj.matrix_world.translation
+            
+            
+            offset = location - terrain_origin
+            if world_shape_type == 'FLAT':
+                offset = offset.project(vecZ)
+        
+            context.scene.terrain_sculpt_mesh_brush_props.draw_height = offset.magnitude
+        
+        
+            context.scene.normal_brush_props.normal = normal
+            redraw_all_viewports(context)
+
+
+    def modal(self, context, event):
+        if event.type == 'MOUSEMOVE':
+            if self.picking:
+                context.window.cursor_set("EYEDROPPER")
+            else:
+                context.window.cursor_set("DEFAULT")
+            return {'PASS_THROUGH'}
+
+        elif event.type == 'LEFTMOUSE':
+            self.picking = False
+            self.mouse_down(context, event)
+#            bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
+            context.window.cursor_set("DEFAULT")
+            return {'FINISHED'}
+
+        elif event.type in {'RIGHTMOUSE', 'ESC'}:
+            self.picking = False
+#            bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
+            print("pick target object cancelled")
+            context.window.cursor_set("DEFAULT")
+            return {'CANCELLED'}
+        else:
+            return {'PASS_THROUGH'}
+
+    def invoke(self, context, event):
+        if context.area.type == 'VIEW_3D':
+
+            args = (self, context)
+            self._context = context
+
+            context.window_manager.modal_handler_add(self)
+            
+            context.window.cursor_set("EYEDROPPER")
+            self.picking = True
+            
+            
+            return {'RUNNING_MODAL'}
+        else:
+            self.report({'WARNING'}, "View3D not found, cannot run operator")
+            return {'CANCELLED'}
 
 #---------------------------
 
@@ -529,16 +650,21 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         #col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Mesh Brush", icon_value = pcoll["uvBrush"].icon_id)
         col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Brush for Meshes")
         
+        
         col.prop(props, "radius")
         col.prop(props, "inner_radius")
         col.prop(props, "strength")
         col.prop(props, "use_pressure")
         col.prop(props, "terrain_origin")
         col.prop(props, "brush_type", expand = True)
-        col.prop(props, "world_shape_type")
+        col.prop(props, "world_shape_type", text = "Land Shape")
         
         if props.brush_type == 'DRAW':
             col.prop(props, "draw_height")
+            col.operator("kitfox.terrain_height_picker_mesh", text="Terrain height picker", icon="EYEDROPPER")
+        
+        if props.brush_type == 'ADD' or props.brush_type == 'SUBTRACT':
+            col.prop(props, "add_amount")
         
         if props.brush_type == 'RAMP':
             col.prop(props, "ramp_width")
@@ -554,6 +680,7 @@ def register():
     #Register tools
     bpy.utils.register_class(TerrainSculptMeshProperties)
     bpy.utils.register_class(TerrainSculptMeshOperator)
+    bpy.utils.register_class(TerrainHeightPickerMeshOperator)
     bpy.utils.register_class(TerrainSculptMeshBrushPanel)
 
     bpy.types.Scene.terrain_sculpt_mesh_brush_props = bpy.props.PointerProperty(type=TerrainSculptMeshProperties)
@@ -561,6 +688,7 @@ def register():
 def unregister():
     bpy.utils.unregister_class(TerrainSculptMeshProperties)
     bpy.utils.unregister_class(TerrainSculptMeshOperator)
+    bpy.utils.unregister_class(TerrainHeightPickerMeshOperator)
     bpy.utils.unregister_class(TerrainSculptMeshBrushPanel)
 
     del bpy.types.Scene.terrain_sculpt_mesh_brush_props
