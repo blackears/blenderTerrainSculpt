@@ -86,7 +86,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
             ('DRAW', "Draw", "Draw terrain at the given height above the origin."),
             ('ADD', "Add", "Add to terrain height."),
             ('SUBTRACT', "Subtract", "Subtract from terrain height."),
-            ('FLATTEN', "Flatten", "Make terrain the same height as the spot where you first place your brush."),
+            ('LEVEL', "Level", "Make terrain the same height as the spot where you first place your brush."),
             ('SMOOTH', "Smooth", "Even out the terrain under the brush."),
             ('RAMP', "Ramp", "Draw a ramp between where you press and release the mouse."),
         ),
@@ -429,14 +429,16 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #            print("=====")
 #            print ("obj.name " + str(obj.name))
 
-            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'FLATTEN', 'SMOOTH'):
+            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'SMOOTH'):
             
     #                print ("location " + str(location))
                 for v in bm.verts:
 
                     wpos = l2w @ v.co
-                    dist = (wpos - location).magnitude
-                    if dist < brush_radius:
+                    woffset = wpos - location
+                    dist_sq = woffset.dot(woffset)
+                    if dist_sq < brush_radius * brush_radius:
+                        dist = math.sqrt(dist_sq)
                         frac = dist / brush_radius
     #                        offset_in_brush = 1 - dist / brush_radius
                         atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
@@ -480,7 +482,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             if event.ctrl:
                                 adjust = -adjust
                             new_offset = (wpos - offset_from_origin) + -down * (len - adjust)
-                        elif brush_type == 'FLATTEN':
+                        elif brush_type == 'LEVEL':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
                         elif brush_type == 'SMOOTH':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
@@ -520,6 +522,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         world_shape_type = props.world_shape_type
         terrain_origin_obj = props.terrain_origin
 
+        print("======")
     
         terrain_origin = vecZero.copy()
         if terrain_origin_obj != None:
@@ -565,7 +568,19 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 vert_parallel = vert_offset.project(ramp_span)
                 vert_perp = vert_offset - vert_parallel
                 
-                if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_perp.length_squared < ramp_width * ramp_width:
+                offset_from_origin = wpos - terrain_origin
+                if world_shape_type == 'FLAT':
+                    offset_from_origin = offset_from_origin.project(vecZ)
+                    down = -vecZ
+                else:
+                    down = -offset_from_origin.normalized()
+                    
+                binormal = down.cross(ramp_span)
+                binormal.normalize()
+                vert_binormal = vert_offset.project(binormal)
+                
+                # if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_perp.length_squared < ramp_width * ramp_width:
+                if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_binormal.length_squared < ramp_width * ramp_width:
                     frac = vert_parallel.length / ramp_span.length
                     ramp_height = ramp_start + ramp_span * frac
                     attenParallel = 1
@@ -575,21 +590,26 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         attenParallel = (1 - frac) / ramp_falloff
                         
                     
-                    vert_perp_frac = vert_perp.length / ramp_width
+                    vert_perp_frac = vert_binormal.length / ramp_width
                     attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
-                    
-                    if world_shape_type == 'FLAT':
-                        down = -vecZ
-                    else:
-                        down = wpos - terrain_origin
-                        down.normalize()
                         
-    #                newWpos = wpos.copy()
-    #                newWpos.z = lerp(newWpos.z, ramp_height.z, strength * attenParallel * attenPerp)
-                    
+                            
+                    # len = offset_from_origin.magnitude
+                    # if offset_from_origin.dot(down) > 0:
+                        # len = -len
                     s = closest_point_to_line(wpos, down, ramp_start, ramp_span)
                     clamped_to_ramp = wpos + down * s
                     newWpos = lerp(wpos, clamped_to_ramp, strength * attenParallel * attenPerp)
+
+                    ##############################
+                    print(" _ ")
+                    print ("wpos " + str(wpos))
+                    print ("clamped_to_ramp " + str(clamped_to_ramp))
+                    print ("down " + str(down))
+                    print ("s " + str(s))
+                    print ("newWpos " + str(newWpos))
+                    
+                    ##############################
                 
                     v.co = w2l @ newWpos
                 
