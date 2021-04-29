@@ -144,7 +144,8 @@ class TerrainSculptMeshWindow(Window):
     def __init__(self):
         super().__init__()
 #        self.background_color = mathutils.Vector((.9, .5, .5, 1))
-        pass
+        self.set_title("Terrain Sculpt Properties")
+        panel = self.get_main_panel()
 
 #--------------------------------------
 
