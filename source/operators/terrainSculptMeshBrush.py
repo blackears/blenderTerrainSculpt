@@ -794,8 +794,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             if event.value == 'RELEASE':
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
-                self.history_restore_bookmark(context, 0)
-                self.history_clear(context)            
+                # self.history_restore_bookmark(context, 0)
+                # self.history_clear(context)            
                 return {'CANCELLED'}
             return {'RUNNING_MODAL'}
 
