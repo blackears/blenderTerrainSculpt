@@ -22,14 +22,16 @@ import gpu
 import mathutils
 import math
 import bmesh
-from .math.vecmath import *
-from .blenderUtil import *
+from ..kitfox.math.vecmath import *
+from ..kitfox.blenderUtil import *
 
 from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
 
-
-
+# import sys
+# sys.path.insert(0, '..')
+# import kitfox.gui.window
+from ..kitfox.gui.window import Window
 
 # vecZ = mathutils.Vector((0, 0, 1))
 # vecX = mathutils.Vector((1, 0, 0))
@@ -40,6 +42,9 @@ batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
 batchSquare = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsSquare_strip})
 
 brush_radius_increment = .9
+
+#my_window = window.Window()
+#my_window = Window()
 
 #--------------------------------------
 
@@ -135,6 +140,14 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
 
 #--------------------------------------
 
+class TerrainSculptMeshWindow(Window):
+    def __init__(self):
+        super().__init__()
+#        self.background_color = mathutils.Vector((.9, .5, .5, 1))
+        pass
+
+#--------------------------------------
+
 
 #Find matrix that will rotate Z axis to point along normal
 #coord - point in world space
@@ -157,6 +170,11 @@ def calc_vertex_transform_world(pos, norm):
     return m
 
 
+
+def draw_viewport_callback(self, context):
+#    print("drawing window")
+    self.window.draw(context)
+    
 
 def draw_callback(self, context):
     ctx = bpy.context
@@ -270,6 +288,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         self.show_cursor = False
         self.edit_object = None
         self.stroke_trail = []
+        
+        self.window = TerrainSculptMeshWindow()
 
     def __del__(self):
 #        print("destruct UvBrushToolOperator")
@@ -522,7 +542,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         world_shape_type = props.world_shape_type
         terrain_origin_obj = props.terrain_origin
 
-        print("======")
+#        print("======")
     
         terrain_origin = vecZero.copy()
         if terrain_origin_obj != None:
@@ -602,12 +622,12 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     newWpos = lerp(wpos, clamped_to_ramp, strength * attenParallel * attenPerp)
 
                     ##############################
-                    print(" _ ")
-                    print ("wpos " + str(wpos))
-                    print ("clamped_to_ramp " + str(clamped_to_ramp))
-                    print ("down " + str(down))
-                    print ("s " + str(s))
-                    print ("newWpos " + str(newWpos))
+                    # print(" _ ")
+                    # print ("wpos " + str(wpos))
+                    # print ("clamped_to_ramp " + str(clamped_to_ramp))
+                    # print ("down " + str(down))
+                    # print ("s " + str(s))
+                    # print ("newWpos " + str(newWpos))
                     
                     ##############################
                 
@@ -667,7 +687,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
             
             if result == False or object.select_get() == False or object.type != 'MESH':
-                return {'PASS_THROUGH'}
+                return {'RUNNING_MODAL'}
                             
             self.dragging = True
             self.stroke_trail = []
@@ -702,6 +722,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
     def modal(self, context, event):
 #        print("modal evTyp:%s evVal:%s" % (str(event.type), str(event.value)))
         context.area.tag_redraw()
+        
+        window_result = self.window.handle_event(context, event)
+        if window_result['consumed']:
+            return {'RUNNING_MODAL'}
 
         if event.type in {'MIDDLEMOUSE', 'WHEELUPMOUSE', 'WHEELDOWNMOUSE'}:
             # allow navigation
@@ -713,7 +737,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             if self.dragging:
                 return {'RUNNING_MODAL'}
             else:
-                return {'PASS_THROUGH'}
+                return {'RUNNING_MODAL'}
             
         elif event.type == 'LEFTMOUSE':
             return self.mouse_click(context, event)
@@ -735,6 +759,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         elif event.type in {'RET'}:
             if event.value == 'RELEASE':
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
+                bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
 #                self.history_clear(context)
                 return {'FINISHED'}
             return {'RUNNING_MODAL'}
@@ -768,6 +793,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         elif event.type == 'ESC':
             if event.value == 'RELEASE':
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
+                bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
                 self.history_restore_bookmark(context, 0)
                 self.history_clear(context)            
                 return {'CANCELLED'}
@@ -785,6 +811,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
             args = (self, context)
             self._handle = bpy.types.SpaceView3D.draw_handler_add(draw_callback, args, 'WINDOW', 'POST_VIEW')
+            self._handle_viewport = bpy.types.SpaceView3D.draw_handler_add(draw_viewport_callback, args, 'WINDOW', 'POST_PIXEL')
 
             redraw_all_viewports(context)
             # self.history_clear(context)
@@ -792,10 +819,14 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             # self.history_snapshot(context, 0)
 
             context.window_manager.modal_handler_add(self)
+            context.area.tag_redraw()
+            
             return {'RUNNING_MODAL'}
         else:
             self.report({'WARNING'}, "View3D not found, cannot run operator")
             return {'CANCELLED'}
+            
+            
 #---------------------------
 
 class TerrainHeightPickerMeshOperator(bpy.types.Operator):
@@ -864,13 +895,11 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
         elif event.type == 'LEFTMOUSE':
             self.picking = False
             self.mouse_down(context, event)
-#            bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             context.window.cursor_set("DEFAULT")
             return {'FINISHED'}
 
         elif event.type in {'RIGHTMOUSE', 'ESC'}:
             self.picking = False
-#            bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             print("pick target object cancelled")
             context.window.cursor_set("DEFAULT")
             return {'CANCELLED'}
@@ -888,12 +917,12 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
             context.window.cursor_set("EYEDROPPER")
             self.picking = True
             
-            
             return {'RUNNING_MODAL'}
         else:
             self.report({'WARNING'}, "View3D not found, cannot run operator")
             return {'CANCELLED'}
 
+ 
 #---------------------------
 
 class TerrainSculptMeshBrushPanel(bpy.types.Panel):
@@ -959,7 +988,7 @@ def register():
     bpy.utils.register_class(TerrainSculptMeshOperator)
     bpy.utils.register_class(TerrainHeightPickerMeshOperator)
     bpy.utils.register_class(TerrainSculptMeshBrushPanel)
-
+    
     bpy.types.Scene.terrain_sculpt_mesh_brush_props = bpy.props.PointerProperty(type=TerrainSculptMeshProperties)
 
 def unregister():
@@ -967,7 +996,7 @@ def unregister():
     bpy.utils.unregister_class(TerrainSculptMeshOperator)
     bpy.utils.unregister_class(TerrainHeightPickerMeshOperator)
     bpy.utils.unregister_class(TerrainSculptMeshBrushPanel)
-
+    
     del bpy.types.Scene.terrain_sculpt_mesh_brush_props
 
 
