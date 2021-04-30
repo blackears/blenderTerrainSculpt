@@ -159,6 +159,10 @@ class TerrainSculptMeshWindow(Window):
         rad_panel_layout.add_child(self.radius_label)
         self.radius_data = Label("0")
         rad_panel_layout.add_child(self.radius_data)
+        self.radius_data.set_background_color(Vector((.7, .7, .7, 1)))
+        self.radius_data.set_border_radius(4)
+        self.radius_data.set_expansion_x(ExpansionType.EXPAND)
+        self.radius_data.set_align_x(AlignX.RIGHT)
         
         
         self.layout.layout_components(self.bounds())
