@@ -164,6 +164,16 @@ class TerrainSculptMeshWindow(Window):
         self.layout.layout_components(self.bounds())
         
         self.layout.dump()
+
+    def draw(self, context):
+#        props = context.scene.terrain_sculpt_mesh_brush_props
+        props = context.scene.terrain_sculpt_mesh_brush_props
+        brush_radius = props.radius
+
+        text = "{:.3f}".format(brush_radius)
+        self.radius_data.text = text
+
+        super().draw(context)
         
 
 #--------------------------------------
@@ -193,7 +203,8 @@ def calc_vertex_transform_world(pos, norm):
 
 def draw_viewport_callback(self, context):
 #    print("drawing window")
-    self.window.draw(context)
+    if self.window != None:
+        self.window.draw(context)
     
 
 def draw_callback(self, context):
@@ -742,6 +753,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
     def modal(self, context, event):
 #        print("modal evTyp:%s evVal:%s" % (str(event.type), str(event.value)))
         context.area.tag_redraw()
+        
+        # if not self.window:
+            # self.window = TerrainSculptMeshWindow(context)
         
         window_result = self.window.handle_event(context, event)
         if window_result['consumed']:
