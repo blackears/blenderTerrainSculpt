@@ -31,7 +31,7 @@ from bpy_extras import view3d_utils
 # import sys
 # sys.path.insert(0, '..')
 # import kitfox.gui.window
-from ..kitfox.gui.window import Window
+from ..kitfox.gui.window import *
 
 # vecZ = mathutils.Vector((0, 0, 1))
 # vecX = mathutils.Vector((1, 0, 0))
@@ -146,6 +146,18 @@ class TerrainSculptMeshWindow(Window):
 #        self.background_color = mathutils.Vector((.9, .5, .5, 1))
         self.set_title("Terrain Sculpt Properties")
         panel = self.get_main_panel()
+        
+        main_layout = LayoutBox(axis = Axis.Y)
+        panel.set_layout(main_layout)
+
+        
+        self.radius_label = Label("Radius: ")
+        main_layout.add_child(self.radius_label)
+        
+        self.layout.layout_components(self.bounds())
+        
+        self.layout.dump()
+        
 
 #--------------------------------------
 
