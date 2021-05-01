@@ -32,6 +32,7 @@ from bpy_extras import view3d_utils
 # sys.path.insert(0, '..')
 # import kitfox.gui.window
 from ..kitfox.gui.window import *
+from ..kitfox.gui.textInput import *
 
 # vecZ = mathutils.Vector((0, 0, 1))
 # vecX = mathutils.Vector((1, 0, 0))
@@ -157,12 +158,12 @@ class TerrainSculptMeshWindow(Window):
         self.rad_panel.set_layout(rad_panel_layout)
         self.radius_label = Label("Radius: ")
         rad_panel_layout.add_child(self.radius_label)
-        self.radius_data = Label("0")
+        self.radius_data = TextInput("0")
         rad_panel_layout.add_child(self.radius_data)
-        self.radius_data.set_background_color(Vector((.7, .7, .7, 1)))
-        self.radius_data.set_border_radius(4)
+#        self.radius_data.set_background_color(Vector((.7, .7, .7, 1)))
+#        self.radius_data.set_border_radius(4)
         self.radius_data.set_expansion_x(ExpansionType.EXPAND)
-        self.radius_data.set_align_x(AlignX.RIGHT)
+#        self.radius_data.set_align_x(AlignX.RIGHT)
         
         
         self.layout.layout_components(self.bounds())
@@ -762,7 +763,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             # self.window = TerrainSculptMeshWindow(context)
         
         window_result = self.window.handle_event(context, event)
-        if window_result['consumed']:
+#        if window_result['consumed']:
+        if window_result:
             return {'RUNNING_MODAL'}
 
         if event.type in {'MIDDLEMOUSE', 'WHEELUPMOUSE', 'WHEELDOWNMOUSE'}:
