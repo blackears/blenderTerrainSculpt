@@ -181,7 +181,53 @@ class TerrainSculptMeshWindow(Window):
         super().draw(context)
         
 
+
 #--------------------------------------
+
+def pick_height(context, event):
+    mouse_pos = (event.mouse_region_x, event.mouse_region_y)
+
+    ctx = bpy.context
+
+    region = context.region
+    rv3d = context.region_data
+
+    view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
+    ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
+
+
+    viewlayer = bpy.context.view_layer
+    #result, location, normal, index, object, matrix = ray_cast(context, viewlayer, ray_origin, view_vector)
+
+    hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+    
+    if hit_object:
+        #object.matrix_world @ 
+        props = context.scene.terrain_sculpt_mesh_brush_props
+        terrain_origin_obj = props.terrain_origin
+        world_shape_type = props.world_shape_type
+    
+        terrain_origin = vecZero.copy()
+        if terrain_origin_obj != None:
+            terrain_origin = terrain_origin_obj.matrix_world.translation
+        
+        
+        offset = location - terrain_origin
+        down = -offset
+        
+        if world_shape_type == 'FLAT':
+            offset = offset.project(vecZ)
+            down = -vecZ
+            
+        len = offset.magnitude
+        if offset.dot(down) > 0:
+            len = -len
+    
+        context.scene.terrain_sculpt_mesh_brush_props.draw_height = len
+    
+    
+        context.scene.normal_brush_props.normal = normal
+        redraw_all_viewports(context)
 
 
 #Find matrix that will rotate Z axis to point along normal
@@ -353,32 +399,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         if not hit_object or object.select_get() == False or object.type != 'MESH':
             return
         
-        # l2w = object.matrix_world
-        # w2l = l2w.inverted()
-
-        # if self.edit_object == None:
-            # hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
-        # else:
-            # l2w = self.edit_object.matrix_world
-            # w2l = l2w.inverted()
-            # local_ray_origin = w2l @ ray_origin
-            # local_view_vector = mul_vector(w2l, view_vector)
-
-            # if self.edit_object.mode == 'OBJECT':
-                # hit_object, location, normal, index = self.edit_object.ray_cast(local_ray_origin, local_view_vector)
-                # object = self.edit_object
-                
-                # location = l2w @ location
-                
-            # if self.edit_object.mode == 'EDIT':
-                # bm = bmesh.from_edit_mesh(self.edit_object.data)
-                # tree = mathutils.bvhtree.BVHTree.FromBMesh(bm)
-                # location, normal, index, distance = tree.ray_cast(local_ray_origin, local_view_vector)
-                # hit_object = location != None
-                # object = self.edit_object
-                
-                # location = l2w @ location
-
         props = context.scene.terrain_sculpt_mesh_brush_props
         brush_radius = props.radius
         inner_radius = props.inner_radius
@@ -391,6 +411,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ramp_width = props.ramp_width
         terrain_origin_obj = props.terrain_origin
     
+    
         terrain_origin = vecZero.copy()
         if terrain_origin_obj != None:
             terrain_origin = terrain_origin_obj.matrix_world.translation
@@ -398,18 +419,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         if event.shift:
             #Shift key overrides for smooth mode
             brush_type = 'SMOOTH'
-    
-#        if hit_object > 0:
-            
-        # if self.edit_object == None:
-            # self.edit_object = object
-#            print("--------Edit object uvs") 
-        
-#        l2w = object.matrix_world
-        # n2w = l2w.copy()
-        # n2w.invert()
-        # n2w.transpose()
-#            print("Foo<<2>>")
+
         
         if brush_type == 'SMOOTH':
             weight_sum = 0
@@ -474,25 +484,43 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             
             l2w = obj.matrix_world
             w2l = l2w.inverted()
-            
-            mesh = obj.data
-            if obj.mode == 'EDIT':
-                bm = bmesh.from_edit_mesh(mesh)
-            elif obj.mode == 'OBJECT':
-                bm = bmesh.new()
-                bm.from_mesh(mesh)
+
+            if obj.type != 'MESH':
+                continue
 
 #            print("=====")
 #            print ("obj.name " + str(obj.name))
 
             if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'SMOOTH'):
+
+            
+                mesh = obj.data
+                if obj.mode == 'EDIT':
+                    bm = bmesh.from_edit_mesh(mesh)
+                elif obj.mode == 'OBJECT':
+                    bm = bmesh.new()
+                    bm.from_mesh(mesh)
+
             
     #                print ("location " + str(location))
                 for v in bm.verts:
 
                     wpos = l2w @ v.co
                     woffset = wpos - location
-                    dist_sq = woffset.dot(woffset)
+                        
+                    offset_from_origin = wpos - terrain_origin
+                    if world_shape_type == 'FLAT':
+#                            print("world_shape_type " + str(world_shape_type))
+                        offset_from_origin = offset_from_origin.project(vecZ)
+                        down = -vecZ
+                    else:
+                        down = -offset_from_origin.normalized()
+                    
+                    offset_down = woffset.project(down)
+                    offset_perp = woffset - offset_down
+                    
+                    dist_sq = offset_perp.dot(offset_perp)
+                    
                     if dist_sq < brush_radius * brush_radius:
                         dist = math.sqrt(dist_sq)
                         frac = dist / brush_radius
@@ -502,14 +530,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         atten *= strength
                         if use_pressure:
                             atten *= event.pressure
-                        
-                        offset_from_origin = wpos - terrain_origin
-                        if world_shape_type == 'FLAT':
-    #                            print("world_shape_type " + str(world_shape_type))
-                            offset_from_origin = offset_from_origin.project(vecZ)
-                            down = -vecZ
-                        else:
-                            down = -offset_from_origin.normalized()
                             
                         len = offset_from_origin.magnitude
                         if offset_from_origin.dot(down) > 0:
@@ -547,14 +567,13 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             
                 
                 
-
-            if obj.mode == 'EDIT':
-                bmesh.update_edit_mesh(mesh)
-            elif obj.mode == 'OBJECT':
-                bm.to_mesh(mesh)
-                bm.free()
+                if obj.mode == 'EDIT':
+                    bmesh.update_edit_mesh(mesh)
+                elif obj.mode == 'OBJECT':
+                    bm.to_mesh(mesh)
+                    bm.free()
                 
-            mesh.calc_normals()
+                mesh.calc_normals()
 
 
     def draw_ramp(self, context, event):
@@ -597,6 +616,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         
         for obj in context.scene.objects:
             if not obj.select_get():
+                continue
+
+            if obj.type != 'MESH':
                 continue
             
             l2w = obj.matrix_world
@@ -693,6 +715,17 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
         viewlayer = bpy.context.view_layer
         result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+
+        props = context.scene.terrain_sculpt_mesh_brush_props
+        brush_type = props.brush_type
+
+        if brush_type == 'DRAW' and event.ctrl:
+            context.window.cursor_set("EYEDROPPER")
+            self.show_cursor = False
+#            pick_height(context, event)
+            return
+            
+        context.window.cursor_set("DEFAULT")
         
         #Brush cursor display
         if result:
@@ -706,7 +739,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
         if self.dragging:
             self.dab_brush(context, event)
-            pass
 
 
     def mouse_click(self, context, event):
@@ -730,7 +762,17 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self.start_location = location.copy()
             
 #            self.edit_object = object
-            
+
+            props = context.scene.terrain_sculpt_mesh_brush_props
+            brush_type = props.brush_type
+    
+            if brush_type == 'DRAW' and event.ctrl:
+                context.window.cursor_set("EYEDROPPER")
+                pick_height(context, event)
+                return {'RUNNING_MODAL'}
+
+            context.window.cursor_set("DEFAULT")
+        
             self.dab_brush(context, event, start_stroke = True)
 
             
@@ -747,6 +789,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #            self.edit_object = None
             
 #            self.history_snapshot(context)
+            context.window.cursor_set("DEFAULT")
 
 
         return {'RUNNING_MODAL'}
@@ -763,6 +806,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             # self.window = TerrainSculptMeshWindow(context)
         
         window_result = self.window.handle_event(context, event)
+#        print ("window_result " + str(window_result))
+        
 #        if window_result['consumed']:
         if window_result:
             return {'RUNNING_MODAL'}
@@ -878,52 +923,6 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
     def __init__(self):
         self.picking = False
 
-    def mouse_down(self, context, event):
-        mouse_pos = (event.mouse_region_x, event.mouse_region_y)
-
-        ctx = bpy.context
-
-        region = context.region
-        rv3d = context.region_data
-
-        view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
-        ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
-
-
-        viewlayer = bpy.context.view_layer
-        #result, location, normal, index, object, matrix = ray_cast(context, viewlayer, ray_origin, view_vector)
-
-        hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
-        
-        if hit_object:
-            #object.matrix_world @ 
-            props = context.scene.terrain_sculpt_mesh_brush_props
-            terrain_origin_obj = props.terrain_origin
-            world_shape_type = props.world_shape_type
-        
-            terrain_origin = vecZero.copy()
-            if terrain_origin_obj != None:
-                terrain_origin = terrain_origin_obj.matrix_world.translation
-            
-            
-            offset = location - terrain_origin
-            down = -offset
-            
-            if world_shape_type == 'FLAT':
-                offset = offset.project(vecZ)
-                down = -vecZ
-                
-            len = offset.magnitude
-            if offset.dot(down) > 0:
-                len = -len
-        
-            context.scene.terrain_sculpt_mesh_brush_props.draw_height = len
-        
-        
-            context.scene.normal_brush_props.normal = normal
-            redraw_all_viewports(context)
-
-
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
             if self.picking:
@@ -934,7 +933,8 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
 
         elif event.type == 'LEFTMOUSE':
             self.picking = False
-            self.mouse_down(context, event)
+#            self.mouse_down(context, event)
+            pick_height(context, event)
             context.window.cursor_set("DEFAULT")
             return {'FINISHED'}
 
