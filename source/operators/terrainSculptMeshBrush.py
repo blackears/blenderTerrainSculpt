@@ -72,7 +72,15 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         description = "Strength of brush.", 
         default = 1, 
         min = 0,
-        soft_max = 4
+        soft_max = 1
+    )
+
+    strength_ramp : bpy.props.FloatProperty(
+        name = "Ramp Strength", 
+        description = "Strength for ramp tool.", 
+        default = 1, 
+        min = 0,
+        soft_max = 1
     )
 
     use_pressure : bpy.props.BoolProperty(
@@ -420,6 +428,11 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             #Shift key overrides for smooth mode
             brush_type = 'SMOOTH'
 
+
+        if world_shape_type == 'FLAT':
+            down_hit = -vecZ
+        else:
+            down_hit = terrain_origin - location
         
         if brush_type == 'SMOOTH':
             weight_sum = 0
@@ -486,6 +499,15 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             w2l = l2w.inverted()
 
             if obj.type != 'MESH':
+                continue
+
+            #Bounding box check
+            bounds = mesh_bounds_fast(obj)
+#            print("-- " + str(bounds))
+            bbox_check = bounds.intersect_with_ray(location, down_hit, brush_radius, l2w)
+#            print("bbox_check " + str(bbox_check))
+#            if not bounds.intersect_with_ray(location, down_hit, brush_radius, l2w):
+            if not bbox_check:
                 continue
 
 #            print("=====")
@@ -591,7 +613,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             return
 
         props = context.scene.terrain_sculpt_mesh_brush_props
-        strength = props.strength
+        strength_ramp = props.strength_ramp
         ramp_width = props.ramp_width
         ramp_falloff = props.ramp_falloff
         world_shape_type = props.world_shape_type
@@ -677,7 +699,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         # len = -len
                     s = closest_point_to_line(wpos, down, ramp_start, ramp_span)
                     clamped_to_ramp = wpos + down * s
-                    newWpos = lerp(wpos, clamped_to_ramp, strength * attenParallel * attenPerp)
+                    newWpos = lerp(wpos, clamped_to_ramp, strength_ramp * attenParallel * attenPerp)
 
                     ##############################
                     # print(" _ ")
@@ -998,7 +1020,10 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         
         col.prop(props, "radius")
         col.prop(props, "inner_radius")
-        col.prop(props, "strength")
+        if props.brush_type == 'RAMP':
+            col.prop(props, "strength_ramp")
+        else:
+            col.prop(props, "strength")
         col.prop(props, "use_pressure")
         col.prop(props, "terrain_origin")
         col.prop(props, "brush_type", expand = True, text = "Brush Type")
