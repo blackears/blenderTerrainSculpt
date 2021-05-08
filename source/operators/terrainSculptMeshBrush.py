@@ -72,7 +72,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         description = "Strength of brush.", 
         default = 1, 
         min = 0,
-        soft_max = 1
+        max = 1
     )
 
     strength_ramp : bpy.props.FloatProperty(
@@ -385,6 +385,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #        print("destruct UvBrushToolOperator")
         pass
 
+    def stroke_falloff(self, x):
+#        return 1 - x * x
+        return -x * x + 2 * x
 
     def dab_brush(self, context, event, start_stroke = False):
         mouse_pos = (event.mouse_region_x, event.mouse_region_y)
@@ -430,9 +433,11 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
 
         if world_shape_type == 'FLAT':
-            down_hit = -vecZ
+            hit_down = -vecZ
+            hit_offset = (location - terrain_origin).project(vecZ)
         else:
-            down_hit = terrain_origin - location
+            hit_down = terrain_origin - location
+            hit_offset = -hit_down
         
         if brush_type == 'SMOOTH':
             weight_sum = 0
@@ -441,9 +446,18 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             for obj in context.scene.objects:
                 if not obj.select_get():
                     continue
-                
+
+                if obj.type != 'MESH':
+                    continue
+                    
                 l2w = obj.matrix_world
             
+                #Bounding box check
+                bounds = mesh_bounds_fast(obj)
+                bbox_check = bounds.intersect_with_ray(location, hit_down, brush_radius, l2w)
+                if not bbox_check:
+                    continue
+                
                 mesh = obj.data
                 if obj.mode == 'EDIT':
                     bm = bmesh.from_edit_mesh(mesh)
@@ -451,26 +465,30 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     bm = bmesh.new()
                     bm.from_mesh(mesh)
 
+                
+
                 for v in bm.verts:
 
                     wpos = l2w @ v.co
-                    dist = (wpos - location).magnitude
+                    
+                    offset_from_origin = wpos - terrain_origin
+                    if world_shape_type == 'FLAT':
+    #                            print("world_shape_type " + str(world_shape_type))
+                        offset_from_origin = offset_from_origin.project(vecZ)
+                        down = -vecZ
+                    else:
+                        down = -offset_from_origin.normalized()
+                        
+                    offset = wpos - location
+                    offset_parallel = offset.project(down)
+                    offset_perp = offset - offset_parallel
+                        
+                    dist = offset_perp.magnitude
                     if dist < brush_radius:
                         frac = dist / brush_radius
                         atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
+                        atten *= atten
                         
-                        atten *= strength
-                        if use_pressure:
-                            atten *= event.pressure
-                        
-                        offset_from_origin = wpos - terrain_origin
-                        if world_shape_type == 'FLAT':
-    #                            print("world_shape_type " + str(world_shape_type))
-                            offset_from_origin = offset_from_origin.project(vecZ)
-                            down = -vecZ
-                        else:
-                            down = -offset_from_origin.normalized()
-                            
                         len = offset_from_origin.magnitude
                         if offset_from_origin.dot(down) > 0:
                             len = -len
@@ -503,10 +521,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 
             #Bounding box check
             bounds = mesh_bounds_fast(obj)
-#            print("-- " + str(bounds))
-            bbox_check = bounds.intersect_with_ray(location, down_hit, brush_radius, l2w)
+            bbox_check = bounds.intersect_with_ray(location, hit_down, brush_radius, l2w)
 #            print("bbox_check " + str(bbox_check))
-#            if not bounds.intersect_with_ray(location, down_hit, brush_radius, l2w):
             if not bbox_check:
                 continue
 
@@ -514,7 +530,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #            print ("obj.name " + str(obj.name))
 
             if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'SMOOTH'):
-
             
                 mesh = obj.data
                 if obj.mode == 'EDIT':
@@ -548,10 +563,12 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         frac = dist / brush_radius
     #                        offset_in_brush = 1 - dist / brush_radius
                         atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
+                        atten = self.stroke_falloff(atten)
                         
                         atten *= strength
                         if use_pressure:
                             atten *= event.pressure
+                            
                             
                         len = offset_from_origin.magnitude
                         if offset_from_origin.dot(down) > 0:
@@ -683,11 +700,19 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 if vert_parallel.dot(ramp_span) > 0 and vert_parallel.length_squared < ramp_span.length_squared and vert_binormal.length_squared < ramp_width * ramp_width:
                     frac = vert_parallel.length / ramp_span.length
                     ramp_height = ramp_start + ramp_span * frac
+                    falloff_span = ramp_width * ramp_falloff
+                    
+                    vert_parallel_len = vert_parallel.length
+                    vert_parallel_len = min(vert_parallel_len, ramp_span.length - vert_parallel_len)
+                    
                     attenParallel = 1
-                    if frac < ramp_falloff:
-                        attenParallel = frac / ramp_falloff
-                    elif frac > 1 - ramp_falloff:
-                        attenParallel = (1 - frac) / ramp_falloff
+                    if vert_parallel_len < falloff_span:
+                        attenParallel = vert_parallel_len / falloff_span
+                        
+                    # if frac < ramp_falloff:
+                        # attenParallel = frac / ramp_falloff
+                    # elif frac > 1 - ramp_falloff:
+                        # attenParallel = (1 - frac) / ramp_falloff
                         
                     
                     vert_perp_frac = vert_binormal.length / ramp_width
