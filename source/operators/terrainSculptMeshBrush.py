@@ -101,7 +101,8 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
             ('ADD', "Add", "Add to terrain height."),
             ('SUBTRACT', "Subtract", "Subtract from terrain height."),
             ('LEVEL', "Level", "Make terrain the same height as the spot where you first place your brush."),
-            ('SMOOTH', "Smooth", "Even out the terrain under the brush."),
+            ('PLANE', "Plane", "Use the slope of the surface under the brush to set height."),
+            ('SMOOTH', "Smooth", "Average out the terrain under the brush."),
             ('RAMP', "Ramp", "Draw a ramp between where you press and release the mouse."),
         ),
         default='DRAW'
@@ -439,7 +440,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             hit_down = terrain_origin - location
             hit_offset = -hit_down
         
-        if brush_type == 'SMOOTH':
+        if brush_type == 'SMOOTH' or brush_type == 'PLANE':
             weight_sum = 0
             weighted_len_sum = 0
                 
@@ -465,7 +466,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     bm = bmesh.new()
                     bm.from_mesh(mesh)
 
-                
+                smooth_points = []
 
                 for v in bm.verts:
 
@@ -485,26 +486,30 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         
                     dist = offset_perp.magnitude
                     if dist < brush_radius:
-                        frac = dist / brush_radius
-                        atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
-                        atten *= atten
-                        
-                        len = offset_from_origin.magnitude
-                        if offset_from_origin.dot(down) > 0:
-                            len = -len
+                        if brush_type == 'PLANE':
+                            smooth_points.append(wpos)
+                        elif brush_type == 'SMOOTH':
+                            frac = dist / brush_radius
+                            atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
+                            atten *= atten
                             
-                        weight_sum += atten
-                        weighted_len_sum += len * atten
+                            len = offset_from_origin.magnitude
+                            if offset_from_origin.dot(down) > 0:
+                                len = -len
+                                
+                            weight_sum += atten
+                            weighted_len_sum += len * atten
 
-    #            if obj.mode == 'EDIT':
-    #                bmesh.update_edit_mesh(mesh)
                 if obj.mode == 'OBJECT':
-    #                bm.to_mesh(mesh)
                     bm.free()
+
+            if brush_type == 'PLANE':
+                smooth_valid, smooth_plane_pos, smooth_plane_norm = fit_points_to_plane(smooth_points)
                 
-            if weight_sum == 0:
-                return
-            smooth_height = weighted_len_sum / weight_sum
+            elif brush_type == 'SMOOTH':
+                if weight_sum == 0:
+                    return
+                smooth_height = weighted_len_sum / weight_sum
 
 
 
@@ -529,7 +534,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #            print("=====")
 #            print ("obj.name " + str(obj.name))
 
-            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'SMOOTH'):
+            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'PLANE', 'SMOOTH'):
             
                 mesh = obj.data
                 if obj.mode == 'EDIT':
@@ -601,6 +606,13 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
                         elif brush_type == 'SMOOTH':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
+                        elif brush_type == 'PLANE':
+                            if smooth_valid:
+                                s = isect_line_plane(wpos, down, smooth_plane_pos, smooth_plane_norm)
+                                target = wpos + s * down
+                                new_offset = Vector(lerp(wpos, target, atten))
+                            else:
+                                new_offset = wpos
 
                         v.co = w2l @ new_offset
             
