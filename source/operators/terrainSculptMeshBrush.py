@@ -442,12 +442,100 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         self.show_cursor = False
         self.edit_object = None
         self.stroke_trail = []
+
+        self.history = []
+        self.history_idx = -1
+        self.history_limit = 10
+        self.history_bookmarks = {}
         
 #        self.window = TerrainSculptMeshWindow()
 
-    def __del__(self):
-#        print("destruct UvBrushToolOperator")
-        pass
+        
+    def free_snapshot(self, map):
+        for obj in map:
+            bm = map[obj]
+            bm.free()
+
+    #if bookmark is other than -1, snapshot added to bookmark library rather than undo stack
+    def history_snapshot(self, context, bookmark = -1):
+        map = {}
+        for obj in context.selected_objects:
+            if obj.type == 'MESH':
+                bm = bmesh.new()
+                
+                mesh = obj.data
+                bm.from_mesh(mesh)
+                map[obj] = bm
+                
+        if bookmark != -1:
+            self.history_bookmarks[bookmark] = map
+                
+        else:
+            #Remove first element if history queue is maxed out
+            if self.history_idx == self.history_limit:
+                self.free_snapshot(self.history[0])
+                self.history.pop(0)
+            
+                self.history_idx += 1
+
+            #Remove all history past current pointer
+            while self.history_idx < len(self.history) - 1:
+                self.free_snapshot(self.history[-1])
+                self.history.pop()
+                    
+            self.history.append(map)
+            self.history_idx += 1
+        
+    def history_undo(self, context):
+        if (self.history_idx == 0):
+            return
+            
+        self.history_undo_to_snapshot(context, self.history_idx - 1)
+                
+    def history_redo(self, context):
+        if (self.history_idx == len(self.history) - 1):
+            return
+
+        self.history_undo_to_snapshot(context, self.history_idx + 1)
+            
+        
+    def history_restore_bookmark(self, context, bookmark):
+        map = self.history[bookmark]
+    
+        for obj in context.selected_objects:
+            if obj.type == 'MESH':
+                bm = map[obj]
+                
+                mesh = obj.data
+                bm.to_mesh(mesh)
+                mesh.update()
+        
+    def history_undo_to_snapshot(self, context, idx):
+        if idx < 0 or idx >= len(self.history):
+            return
+            
+        self.history_idx = idx
+       
+        map = self.history[self.history_idx]
+        
+        for obj in context.selected_objects:
+            if obj.type == 'MESH':
+                bm = map[obj]
+                
+                mesh = obj.data
+                bm.to_mesh(mesh)
+                mesh.update()
+        
+    def history_clear(self, context):
+        for key in self.history_bookmarks:
+            map = self.history_bookmarks[key]
+            self.free_snapshot(map)
+    
+        for map in self.history:
+            self.free_snapshot(map)
+                
+        self.history = []
+        self.history_idx = -1
 
     def stroke_falloff(self, x):
 #        return 1 - x * x
@@ -910,7 +998,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self.dragging = False
 #            self.edit_object = None
             
-#            self.history_snapshot(context)
+            self.history_snapshot(context)
             context.window.cursor_set("DEFAULT")
 
 
@@ -946,25 +1034,25 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         elif event.type == 'LEFTMOUSE':
             return self.mouse_click(context, event)
 
-        # elif event.type in {'Z'}:
-            # if event.ctrl:
-                # if event.shift:
-                    # if event.value == "RELEASE":
-                        # self.history_redo(context)
-                    # return {'RUNNING_MODAL'}
-                # else:
-                    # if event.value == "RELEASE":
-                        # self.history_undo(context)
+        elif event.type in {'Z'}:
+            if event.ctrl:
+                if event.shift:
+                    if event.value == "RELEASE":
+                        self.history_redo(context)
+                    return {'RUNNING_MODAL'}
+                else:
+                    if event.value == "RELEASE":
+                        self.history_undo(context)
 
-                    # return {'RUNNING_MODAL'}
+                    return {'RUNNING_MODAL'}
                 
-            # return {'RUNNING_MODAL'}
+            return {'RUNNING_MODAL'}
             
         elif event.type in {'RET'}:
             if event.value == 'RELEASE':
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
-#                self.history_clear(context)
+                self.history_clear(context)
                 return {'FINISHED'}
             return {'RUNNING_MODAL'}
 
@@ -1049,8 +1137,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             if event.value == 'RELEASE':
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
-                # self.history_restore_bookmark(context, 0)
-                # self.history_clear(context)            
+                self.history_restore_bookmark(context, 0)
+                self.history_clear(context)            
                 return {'CANCELLED'}
             return {'RUNNING_MODAL'}
 
@@ -1069,9 +1157,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self._handle_viewport = bpy.types.SpaceView3D.draw_handler_add(draw_viewport_callback, args, 'WINDOW', 'POST_PIXEL')
 
             redraw_all_viewports(context)
-            # self.history_clear(context)
-            # self.history_snapshot(context)
-            # self.history_snapshot(context, 0)
+            self.history_clear(context)
+            self.history_snapshot(context)
+            self.history_snapshot(context, 0)
 
             context.window_manager.modal_handler_add(self)
             context.area.tag_redraw()
@@ -1110,7 +1198,7 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
 
         elif event.type in {'RIGHTMOUSE', 'ESC'}:
             self.picking = False
-            print("pick target object cancelled")
+#            print("pick target object cancelled")
             context.window.cursor_set("DEFAULT")
             return {'CANCELLED'}
         else:
