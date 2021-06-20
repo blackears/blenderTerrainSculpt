@@ -38,7 +38,7 @@ def copytree(src, dst):
                 
             shutil.copy(s, d)
 
-def make(copyToBlenderAddons = False, createArchive = False):
+def make(copyToBlenderAddons = False, createArchive = False, rebuildLibs = False):
     projectName = 'terrainSculptTools'
     
     blenderHome = None
@@ -54,6 +54,14 @@ def make(copyToBlenderAddons = False, createArchive = False):
 
     blenderHome = os.getenv('BLENDER_HOME')
 
+    #Rebuild library directory
+    if rebuildLibs:
+        if os.path.exists('lib'):
+            shutil.rmtree('lib')
+        os.mkdir('lib')
+        copytree("../blenderCommon/source", "lib")
+        
+
     #Create build directory
     curPath = os.getcwd()
     if os.path.exists('build'):
@@ -62,7 +70,8 @@ def make(copyToBlenderAddons = False, createArchive = False):
     os.mkdir('build/' + projectName)
 
     copytree("source", "build/" + projectName)
-    copytree("../blenderCommon/source", "build/" + projectName)
+#    copytree("../blenderCommon/source", "build/" + projectName)
+    copytree("lib", "build/" + projectName)
 
     
     #Build addon zip file
@@ -91,12 +100,15 @@ def make(copyToBlenderAddons = False, createArchive = False):
 if __name__ == '__main__':
     copyToBlenderAddons = False
     createArchive = False
+    rebuildLibs = False
 
     for arg in sys.argv[1:]:
         if arg == "-a":
             createArchive = True
         if arg == "-b":
             copyToBlenderAddons = True
+        if arg == "-l":
+            rebuildLibs = True
 
-    make(copyToBlenderAddons, createArchive)
+    make(copyToBlenderAddons, createArchive, rebuildLibs)
             
