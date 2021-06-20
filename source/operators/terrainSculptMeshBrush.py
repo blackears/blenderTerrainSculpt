@@ -53,7 +53,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
     
     radius : bpy.props.FloatProperty(
         name = "Radius", 
-        description = "Radius of brush.", 
+        description = "Radius of brush.  Use [, ] keys to adjust.", 
         default = 1, 
         min = 0, 
         soft_max = 4
@@ -61,7 +61,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
     
     inner_radius : bpy.props.FloatProperty(
         name = "Inner Radius", 
-        description = "Inner Radius of brush.  Used to calculate hardness of brush edge.", 
+        description = "Inner Radius of brush.  Used for hardness of brush edge.  Use Shift plus [, ] keys to adjust.", 
         default = 0, 
         min = 0, 
         max = 1
@@ -118,7 +118,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
 
     draw_height : bpy.props.FloatProperty(
         name = "Draw Height", 
-        description = "Distance above origin to draw terrain.", 
+        description = "Distance above origin to draw terrain.  Use Up, Down arrow to adjust.", 
         default = 1, 
         soft_min = 0,
         soft_max = 100
@@ -268,6 +268,15 @@ def draw_viewport_callback(self, context):
         # self.window.draw(context)
     pass
     
+def draw_circle(mCursor):    
+    #Tangent to mesh
+    gpu.matrix.push()
+    
+    gpu.matrix.multiply_matrix(mCursor)
+
+    shader.uniform_float("color", (1, 0, 1, 1))
+    batchCircle.draw(shader)
+    gpu.matrix.pop()
 
 def draw_callback(self, context):
     ctx = bpy.context
@@ -346,33 +355,40 @@ def draw_callback(self, context):
             draw_pos = self.cursor_pos - offset_from_origin - down * draw_height
             m = mathutils.Matrix.Translation(draw_pos)
 
+            draw_base_pos = self.cursor_pos - offset_from_origin
+            mBase = mathutils.Matrix.Translation(draw_base_pos)
             
             #outer
             mS = mathutils.Matrix.Scale(brush_radius, 4)
             mCursor = m @ mS
         
-            #Tangent to mesh
-            gpu.matrix.push()
+            draw_circle(mCursor)
             
-            gpu.matrix.multiply_matrix(mCursor)
+            draw_circle(mBase @ mS)
+            #Tangent to mesh
+            # gpu.matrix.push()
+            
+            # gpu.matrix.multiply_matrix(mCursor)
 
-            shader.uniform_float("color", (1, 0, 1, 1))
-            batchCircle.draw(shader)
-            gpu.matrix.pop()
+            # shader.uniform_float("color", (1, 0, 1, 1))
+            # batchCircle.draw(shader)
+            # gpu.matrix.pop()
 
             #inner
             mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
             mCursor = m @ mS
         
+            draw_circle(mCursor)
+            draw_circle(mBase @ mS)
             #Tangent to mesh
-            gpu.matrix.push()
+            # gpu.matrix.push()
             
-            gpu.matrix.multiply_matrix(mCursor)
+            # gpu.matrix.multiply_matrix(mCursor)
 
-            shader.uniform_float("color", (1, 0, 1, 1))
-            batchCircle.draw(shader)
+            # shader.uniform_float("color", (1, 0, 1, 1))
+            # batchCircle.draw(shader)
             
-            gpu.matrix.pop()
+            # gpu.matrix.pop()
         
         else:
             #Orient to mesh surface
@@ -394,16 +410,18 @@ def draw_callback(self, context):
             #inner
             mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
             mCursor = m @ mS
+            
+            draw_circle(mCursor)
         
             #Tangent to mesh
-            gpu.matrix.push()
+            # gpu.matrix.push()
             
-            gpu.matrix.multiply_matrix(mCursor)
+            # gpu.matrix.multiply_matrix(mCursor)
 
-            shader.uniform_float("color", (1, 0, 1, 1))
-            batchCircle.draw(shader)
+            # shader.uniform_float("color", (1, 0, 1, 1))
+            # batchCircle.draw(shader)
             
-            gpu.matrix.pop()
+            # gpu.matrix.pop()
 
 
     bgl.glDisable(bgl.GL_DEPTH_TEST)
