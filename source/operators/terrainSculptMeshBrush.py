@@ -97,13 +97,13 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
 
     brush_type : bpy.props.EnumProperty(
         items=(
-            ('DRAW', "Draw", "Draw terrain at the given height above the origin."),
-            ('ADD', "Add", "Add to terrain height."),
-            ('SUBTRACT', "Subtract", "Subtract from terrain height."),
-            ('LEVEL', "Level", "Make terrain the same height as the spot where you first place your brush."),
-            ('PLANE', "Plane", "Use the slope of the surface under the brush to set height."),
-            ('SMOOTH', "Smooth", "Average out the terrain under the brush."),
-            ('RAMP', "Ramp", "Draw a ramp between where you press and release the mouse."),
+            ('DRAW', "Draw (D)", "Draw terrain at the given height above the origin."),
+            ('LEVEL', "Level (L)", "Make terrain the same height as the spot where you first place your brush."),
+            ('ADD', "Add (A)", "Add to terrain height."),
+            ('SUBTRACT', "Subtract (S)", "Subtract from terrain height."),
+            ('SLOPE', "Slope (P)", "Use the slope of the surface under the brush to set height."),
+            ('SMOOTH', "Smooth (M)", "Average out the terrain under the brush."),
+            ('RAMP', "Ramp (R)", "Draw a ramp between where you press and release the mouse."),
         ),
         default='DRAW'
     )
@@ -147,6 +147,7 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         min = 0, 
         max = 1
     )
+
 
 #--------------------------------------
 
@@ -263,8 +264,9 @@ def calc_vertex_transform_world(pos, norm):
 
 def draw_viewport_callback(self, context):
 #    print("drawing window")
-    if self.window != None:
-        self.window.draw(context)
+    # if self.window != None:
+        # self.window.draw(context)
+    pass
     
 
 def draw_callback(self, context):
@@ -282,6 +284,7 @@ def draw_callback(self, context):
     inner_radius = props.inner_radius
     brush_type = props.brush_type
     ramp_width = props.ramp_width
+    draw_height = props.draw_height
     world_shape_type = props.world_shape_type
     terrain_origin_obj = props.terrain_origin
 
@@ -330,7 +333,49 @@ def draw_callback(self, context):
                     batchSquare.draw(shader)
                     gpu.matrix.pop()
                     
+        elif brush_type == 'DRAW':
+        
+            offset_from_origin = self.cursor_pos - terrain_origin
+            if world_shape_type == 'FLAT':
+#                            print("world_shape_type " + str(world_shape_type))
+                offset_from_origin = offset_from_origin.project(vecZ)
+                down = -vecZ
+            else:
+                down = -offset_from_origin.normalized()
+                
+            draw_pos = self.cursor_pos - offset_from_origin - down * draw_height
+            m = mathutils.Matrix.Translation(draw_pos)
+
+            
+            #outer
+            mS = mathutils.Matrix.Scale(brush_radius, 4)
+            mCursor = m @ mS
+        
+            #Tangent to mesh
+            gpu.matrix.push()
+            
+            gpu.matrix.multiply_matrix(mCursor)
+
+            shader.uniform_float("color", (1, 0, 1, 1))
+            batchCircle.draw(shader)
+            gpu.matrix.pop()
+
+            #inner
+            mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
+            mCursor = m @ mS
+        
+            #Tangent to mesh
+            gpu.matrix.push()
+            
+            gpu.matrix.multiply_matrix(mCursor)
+
+            shader.uniform_float("color", (1, 0, 1, 1))
+            batchCircle.draw(shader)
+            
+            gpu.matrix.pop()
+        
         else:
+            #Orient to mesh surface
             m = calc_vertex_transform_world(self.cursor_pos, self.cursor_normal);
             
             #outer
@@ -380,7 +425,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         self.edit_object = None
         self.stroke_trail = []
         
-        self.window = TerrainSculptMeshWindow()
+#        self.window = TerrainSculptMeshWindow()
 
     def __del__(self):
 #        print("destruct UvBrushToolOperator")
@@ -440,7 +485,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             hit_down = terrain_origin - location
             hit_offset = -hit_down
         
-        if brush_type == 'SMOOTH' or brush_type == 'PLANE':
+        if brush_type == 'SMOOTH' or brush_type == 'SLOPE':
             weight_sum = 0
             weighted_len_sum = 0
                 
@@ -486,7 +531,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         
                     dist = offset_perp.magnitude
                     if dist < brush_radius:
-                        if brush_type == 'PLANE':
+                        if brush_type == 'SLOPE':
                             smooth_points.append(wpos)
                         elif brush_type == 'SMOOTH':
                             frac = dist / brush_radius
@@ -503,7 +548,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 if obj.mode == 'OBJECT':
                     bm.free()
 
-            if brush_type == 'PLANE':
+            if brush_type == 'SLOPE':
                 smooth_valid, smooth_plane_pos, smooth_plane_norm = fit_points_to_plane(smooth_points)
                 
             elif brush_type == 'SMOOTH':
@@ -534,7 +579,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #            print("=====")
 #            print ("obj.name " + str(obj.name))
 
-            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'PLANE', 'SMOOTH'):
+            if brush_type in ('DRAW', 'ADD', 'SUBTRACT', 'LEVEL', 'SLOPE', 'SMOOTH'):
             
                 mesh = obj.data
                 if obj.mode == 'EDIT':
@@ -606,7 +651,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
                         elif brush_type == 'SMOOTH':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
-                        elif brush_type == 'PLANE':
+                        elif brush_type == 'SLOPE':
                             if smooth_valid:
                                 s = isect_line_plane(wpos, down, smooth_plane_pos, smooth_plane_norm)
                                 target = wpos + s * down
@@ -861,15 +906,12 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #        print("modal evTyp:%s evVal:%s" % (str(event.type), str(event.value)))
         context.area.tag_redraw()
         
-        # if not self.window:
-            # self.window = TerrainSculptMeshWindow(context)
         
-        window_result = self.window.handle_event(context, event)
-#        print ("window_result " + str(window_result))
+        # window_result = self.window.handle_event(context, event)
+# #        print ("window_result " + str(window_result))
         
-#        if window_result['consumed']:
-        if window_result:
-            return {'RUNNING_MODAL'}
+        # if window_result:
+            # return {'RUNNING_MODAL'}
 
         if event.type in {'MIDDLEMOUSE', 'WHEELUPMOUSE', 'WHEELDOWNMOUSE'}:
             # allow navigation
@@ -932,6 +974,57 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
 #                    brush_radius = max(brush_radius - .1, .1)
                     brush_radius *= brush_radius_increment
                     context.scene.terrain_sculpt_mesh_brush_props.radius = brush_radius
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'UP_ARROW'}:
+            if event.value == "PRESS":
+                brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
+                draw_height = context.scene.terrain_sculpt_mesh_brush_props.draw_height
+                draw_height += brush_radius / 4
+                context.scene.terrain_sculpt_mesh_brush_props.draw_height = draw_height
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'DOWN_ARROW'}:
+            if event.value == "PRESS":
+                brush_radius = context.scene.terrain_sculpt_mesh_brush_props.radius
+                draw_height = context.scene.terrain_sculpt_mesh_brush_props.draw_height
+                draw_height -= brush_radius / 4
+                context.scene.terrain_sculpt_mesh_brush_props.draw_height = draw_height
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'D'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'DRAW'
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'L'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'LEVEL'
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'A'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'ADD'
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'S'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'SUBTRACT'
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'P'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'SLOPE'
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'M'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'SMOOTH'
+            return {'RUNNING_MODAL'}
+
+        elif event.type in {'R'}:
+            if event.value == "PRESS":
+                context.scene.terrain_sculpt_mesh_brush_props.brush_type = 'RAMP'
             return {'RUNNING_MODAL'}
             
         elif event.type == 'ESC':
@@ -1033,6 +1126,13 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = "Kitfox - Terrain"
 
+    # bl_label = "Terrain Sculpt Mesh Brush"
+    # bl_idname = "SCENE_PT_terrain_sculpt_mesh_brush"
+    # bl_space_type = 'PROPERTIES'
+    # bl_region_type = 'WINDOW'
+    # bl_context = "scene"
+#    bl_context = "world"
+    
         
 
     @classmethod
