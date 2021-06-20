@@ -353,10 +353,12 @@ def draw_callback(self, context):
                 down = -offset_from_origin.normalized()
                 
             draw_pos = self.cursor_pos - offset_from_origin - down * draw_height
-            m = mathutils.Matrix.Translation(draw_pos)
+#            m = mathutils.Matrix.Translation(draw_pos)
+            m = calc_vertex_transform_world(draw_pos, -down);
 
             draw_base_pos = self.cursor_pos - offset_from_origin
-            mBase = mathutils.Matrix.Translation(draw_base_pos)
+#            mBase = mathutils.Matrix.Translation(draw_base_pos)
+            mBase = calc_vertex_transform_world(draw_base_pos, -down);
             
             #outer
             mS = mathutils.Matrix.Scale(brush_radius, 4)
@@ -397,15 +399,17 @@ def draw_callback(self, context):
             #outer
             mS = mathutils.Matrix.Scale(brush_radius, 4)
             mCursor = m @ mS
+
+            draw_circle(mCursor)
         
             #Tangent to mesh
-            gpu.matrix.push()
+            # gpu.matrix.push()
             
-            gpu.matrix.multiply_matrix(mCursor)
+            # gpu.matrix.multiply_matrix(mCursor)
 
-            shader.uniform_float("color", (1, 0, 1, 1))
-            batchCircle.draw(shader)
-            gpu.matrix.pop()
+            # shader.uniform_float("color", (1, 0, 1, 1))
+            # batchCircle.draw(shader)
+            # gpu.matrix.pop()
 
             #inner
             mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
