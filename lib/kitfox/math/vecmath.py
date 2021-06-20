@@ -763,6 +763,11 @@ def least_squares_fit(A, b):
 #points is an array of 3D points.
 #  @returns [point, normal] of plane that best fits points
 def fit_points_to_plane(points):
+    if len(points) == 0:
+        return (False, vecZero, vecZero)
+    
+#    print("*** num points " + str(len(points)))
+
     P = np.array(points)
     rows = P.shape[0]
     

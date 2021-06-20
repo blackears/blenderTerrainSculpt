@@ -744,6 +744,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         # print("len " + str(len))
                         # print("draw_height " + str(draw_height))
                         # print("atten " + str(atten))
+                        # print("smooth_plane_pos " + str(smooth_plane_pos))
+                        # print("smooth_plane_norm " + str(smooth_plane_norm))
                             
                         if brush_type == 'DRAW':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, draw_height, atten)
