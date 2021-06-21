@@ -71,7 +71,7 @@ Shortcut **P**.
 
 Calculates the average slope under the cursor and uses that sloping plane to even out the vertices under it.
 
-![UV Brush](doc/image/slope.jpg | width=400)
+![UV Brush](doc/image/slope.jpg)
 
 ##### Smooth
 
