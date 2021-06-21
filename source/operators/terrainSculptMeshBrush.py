@@ -1250,7 +1250,8 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         obj = context.object
-        return obj != None and (obj.mode == 'EDIT' or obj.mode == 'OBJECT')
+#        return obj != None and (obj.mode == 'EDIT' or obj.mode == 'OBJECT')
+        return obj != None and (obj.mode == 'OBJECT')
         
     def draw(self, context):
         layout = self.layout
@@ -1275,6 +1276,7 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
             col.prop(props, "strength")
         col.prop(props, "use_pressure")
         col.prop(props, "terrain_origin")
+        col.label("Brush Type:")
         col.prop(props, "brush_type", expand = True, text = "Brush Type")
         col.prop(props, "world_shape_type", text = "Land Shape")
         
