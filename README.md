@@ -12,7 +12,7 @@ The tool will also work if you have multiple mesh objects selected.  This can be
 
 ### Terrain Sculpt Mesh Brush
 
-![UV Brush](doc/image/simpleLandscape.jpg)
+![UV Brush](doc/image/simpleLandscape2.jpg)
 
 Use sculpting tools to move vertices to create landscapes.
 
