@@ -1,12 +1,12 @@
 # Terrain Sculpting Tool for Blender
 
-A tool for sculpting in Blender with a focus on terrain.  Blender's default sculpting tools are great for character models, but are difficult to use when you're trying to sculpt terrain.  This tool suite provides options for levelling ground, creating ramps and constraining your changes to be perpendicular to the ground.  It's meant to allow you to quickly block in a terrain in the early stages of your project.
+A tool for sculpting in Blender with a focus on terrain.  Blender's default sculpting tools are great for character models, but are difficult to use when you're trying to sculpt terrain.  This tool suite provides options for leveling ground, creating ramps and constraining your changes to be perpendicular to the ground.  It's meant to allow you to quickly block in a terrain in the early stages of your project.
 
 These tools can be accessed through the **Kitfox - Terrain** panel on the right of the 3D Viewport.  You can also access them from the uv unwrap menu (press U while in edit mode).
 
 ### Basic usage
 
-Start by creating the mesh for your terrian (for example, a grid mesh that is 100 x 100 units).  Make sure you are in Object mode.  Select the object and click the **Terrain Brush for Meshes** button in the **Terrain Sculpt Mesh Brush** panel.  The tool will start and a pink circle will appear under your mouse cursor.  Click and drag on the mesh to sculpt your terrain.
+Start by creating the mesh for your terrain (for example, a grid mesh that is 100 x 100 units).  Make sure you are in Object mode.  Select the object and click the **Terrain Brush for Meshes** button in the **Terrain Sculpt Mesh Brush** panel.  The tool will start and a pink circle will appear under your mouse cursor.  Click and drag on the mesh to sculpt your terrain.
 
 The tool will also work if you have multiple mesh objects selected.  This can be used to create seamless transitions between two meshes.
 
@@ -18,7 +18,7 @@ Use sculpting tools to move vertices to create landscapes.
 
 
 #### Terrain Brush for Meshes
-Start the UV Brush tool.  Pressing **Enter** will commit your changes, **ESC** will cancel your changes.  You can press **Ctrl-Z** to undo a stroke or **Ctrl-Z** to redo a stroke.  
+Start the UV Brush tool.  Pressing **Enter** will commit your changes, **ESC** will cancel your changes.  You can press **Ctrl-Z** to undo a stroke or **Shift-Z** to redo a stroke.  
 
 You will be unable to use the menu panel while the tool is active (this is a current limitation of Blender) - however, there are a number of keyboard shortcuts you can use to adjust to tool while it is running.
 
@@ -26,7 +26,7 @@ You will be unable to use the menu panel while the tool is active (this is a cur
 Radius of brush stroke.  You can press the **[** and **]** keys to change the radius of the brush.
 
 #### Inner Radius
-Used to adjust the hardness of the brush.  The space between the outer and inner radius provies a falloff region for your stroke.  You can press the **Shift-[** and **Shift-]** keys to change the inner radius of the brush.
+Used to adjust the hardness of the brush.  The space between the outer and inner radius provides a falloff region for your stroke.  You can press the **Shift-[** and **Shift-]** keys to change the inner radius of the brush.
 
 #### Strength
 Multiplier for the strength of your brush stroke.
