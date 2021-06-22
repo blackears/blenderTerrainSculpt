@@ -129,13 +129,10 @@ To install, start Blender and select Edit > Preferences from the menubar.  Selec
 
 ## Further Information
 
-This addon is available from the Blender market:
-
-https://blendermarket.com/products/uv-tools
+This addon is currently under review at the Blender market.
 
 
 A video giving a quick tour of the addon is available here:
 
-[![Video thumbnail](https://img.youtube.com/vi/bnz31KJJITc/0.jpg)](https://youtu.be/bnz31KJJITc)
-[![Video thumbnail](https://img.youtube.com/vi/hsBdzfSci8k/0.jpg)](https://youtu.be/hsBdzfSci8k)
+[![Video thumbnail](https://img.youtube.com/vi/YsFgJ-My7QY/0.jpg)](https://youtu.be/YsFgJ-My7QY)
 
