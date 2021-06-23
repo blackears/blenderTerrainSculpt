@@ -10,7 +10,7 @@ Start by creating the mesh for your terrain (for example, a grid mesh that is 10
 
 The tool will also work if you have multiple mesh objects selected.  This can be used to create seamless transitions between two meshes.
 
-You might find that this tool is a bit laggy on larger meshes.  The way to deal with that is to subdivide your mesh into smaller peices.  This way the brush only has to recalculate the mesh that is actually under the brush.  If you need to draw over the seam between two meshes, just make sure that all meshes you want to draw on are selected before you start the tool.
+You might find that this tool is a bit laggy on larger meshes.  The way to deal with that is to subdivide your mesh into smaller pieces.  This way the brush only has to recalculate the mesh that is actually under the brush.  If you need to draw over the seam between two meshes, just make sure that all meshes you want to draw on are selected before you start the tool.
 
 ### Terrain Sculpt Mesh Brush
 
