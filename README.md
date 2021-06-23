@@ -129,10 +129,9 @@ To install, start Blender and select Edit > Preferences from the menubar.  Selec
 
 ## Further Information
 
-This addon is currently under review at the Blender market.
-
+This addon is available at the Blender market:
+https://github.com/blackears/blenderTerrainSculpt
 
 A video giving a quick tour of the addon is available here:
-
 [![Video thumbnail](https://img.youtube.com/vi/YsFgJ-My7QY/0.jpg)](https://youtu.be/YsFgJ-My7QY)
 
