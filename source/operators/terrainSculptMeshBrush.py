@@ -192,6 +192,50 @@ class TerrainSculptMeshWindow(Window):
         
 
 
+
+#--------------------------------------
+        
+def pick_object(ray_origin, ray_direction):
+    hit_object = False
+    best_loc = None
+    best_normal = None
+    best_face_idx = None
+    best_obj = None
+    best_matrix = None
+    best_dist_sq = 0
+    
+    for obj in bpy.context.selected_objects:
+        if obj.hide_select:
+            continue
+            
+        l2w = obj.matrix_world
+        w2l = l2w.inverted()
+        n2w = w2l.transposed() #normal transform
+        l_origin = w2l @ ray_origin
+        l_offPt = w2l @ (ray_origin + ray_direction)
+        l_direction = l_offPt - l_origin
+
+        #print("testing " + obj.name + " orig " + str(ray_origin) + " dir " + str(ray_direction))
+            
+        success, location, normal, poly_index = obj.ray_cast(l_origin, l_direction)
+        if not success:
+            continue
+
+        #print("hit " + obj.name)
+                
+        dist_sq = (location - l_origin).length_squared
+        
+        if not hit_object or dist_sq < best_dist_sq:
+            hit_object = True
+            best_loc = l2w @ location
+            best_normal = (n2w @ normal).normalized()
+            best_face_idx = poly_index
+            best_obj = obj
+            best_matrix = l2w
+            best_dist_sq = dist_sq
+        
+    return (hit_object, best_loc, best_normal, best_face_idx, best_obj, best_matrix)
+
 #--------------------------------------
 
 def pick_height(context, event):
@@ -209,7 +253,8 @@ def pick_height(context, event):
     viewlayer = bpy.context.view_layer
     #result, location, normal, index, object, matrix = ray_cast(context, viewlayer, ray_origin, view_vector)
 
-    hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+#    hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+    hit_object, location, normal, face_index, object, matrix = pick_object(ray_origin, view_vector)
     
     if hit_object:
         #object.matrix_world @ 
@@ -554,6 +599,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
         ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
+        print("dab_brush " + " mouse_pos " + str(mouse_pos))
+        print("ray_orig " + str(ray_origin) + "view_vec " + str(view_vector))
+
         viewlayer = bpy.context.view_layer
         
         hit_object = None
@@ -561,7 +609,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         normal = None
         index = None
 
-        hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+#        hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        hit_object, location, normal, face_index, object, matrix = pick_object(ray_origin, view_vector)
         
         if not hit_object or object.select_get() == False or object.type != 'MESH':
             return
@@ -594,7 +643,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         else:
             hit_down = terrain_origin - location
             hit_offset = -hit_down
-        
+    
+        if start_stroke:
+            self.start_height = hit_offset.dot(vecZ)
+
         if brush_type == 'SMOOTH' or brush_type == 'SLOPE':
             weight_sum = 0
             weighted_len_sum = 0
@@ -734,9 +786,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         if offset_from_origin.dot(down) > 0:
                             len = -len
                             
-                        if start_stroke:
-                            self.start_height = len
-
                         # print("---")
                         # print("wpos " + str(wpos))
                         # print("offset_from_origin " + str(offset_from_origin))
@@ -793,7 +842,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
         viewlayer = bpy.context.view_layer
-        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+#        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        result, location, normal, face_index, object, matrix = pick_object(ray_origin, view_vector)
         
         if not result or object.select_get() == False or object.type != 'MESH':
             return
@@ -930,7 +980,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
         viewlayer = bpy.context.view_layer
-        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+#        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+        result, location, normal, index, object, matrix = pick_object(ray_origin, view_vector)
 
         props = context.scene.terrain_sculpt_mesh_brush_props
         brush_type = props.brush_type
@@ -938,7 +989,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         if brush_type == 'DRAW' and event.ctrl:
             context.window.cursor_set("EYEDROPPER")
             self.show_cursor = False
-#            pick_height(context, event)
             return
             
         context.window.cursor_set("DEFAULT")
@@ -967,7 +1017,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
             viewlayer = bpy.context.view_layer
-            result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+#            result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
+            result, location, normal, index, object, matrix = pick_object(ray_origin, view_vector)
 
             
             if result == False or object.select_get() == False or object.type != 'MESH':
@@ -976,8 +1027,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self.dragging = True
             self.stroke_trail = []
             self.start_location = location.copy()
-            
-#            self.edit_object = object
 
             props = context.scene.terrain_sculpt_mesh_brush_props
             brush_type = props.brush_type
