@@ -281,7 +281,7 @@ def pick_height(context, event):
         context.scene.terrain_sculpt_mesh_brush_props.draw_height = len
     
     
-        context.scene.normal_brush_props.normal = normal
+        context.scene.terrain_sculpt_mesh_brush_props.normal = normal
         redraw_all_viewports(context)
 
 
@@ -599,8 +599,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
         ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
-        print("dab_brush " + " mouse_pos " + str(mouse_pos))
-        print("ray_orig " + str(ray_origin) + "view_vec " + str(view_vector))
+#        print("dab_brush " + " mouse_pos " + str(mouse_pos))
+#        print("ray_orig " + str(ray_origin) + "view_vec " + str(view_vector))
 
         viewlayer = bpy.context.view_layer
         
@@ -1285,7 +1285,7 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
     bl_idname = "OBJECT_PT_terrain_sculpt_mesh_brush"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "Kitfox - Terrain"
+    bl_category = "Kitfox: Terrain"
 
     # bl_label = "Terrain Sculpt Mesh Brush"
     # bl_idname = "SCENE_PT_terrain_sculpt_mesh_brush"

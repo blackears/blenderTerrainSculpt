@@ -127,7 +127,7 @@ To build, execute the *makeDeploy.py* script in the root of the project.  It wil
 
 ## Installation
 
-To install, start Blender and select Edit > Preferences from the menubar.  Select the Add-ons tab and then press the Install button.  Browse to the .zip file that you built and select it.  Finally, tick the checkbox next to Add Mesh: Normal Brush.
+To install, start Blender and select Edit > Preferences from the menubar.  Select the Add-ons tab and then press the Install button.  Browse to the .zip file that you built and select it.  Finally, tick the checkbox next to Add Mesh: Terrain Sculpting Tools.
 
 ## Further Information
 
