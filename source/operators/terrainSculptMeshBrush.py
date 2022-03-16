@@ -489,11 +489,36 @@ class SmoothingInfo:
     def addPoint(self, wpos, height):
         self.points.append(SmoothingPointInfo(wpos, height))
         
-    def getCentroidHeight(self, wpos):
-        for p in self.points:
-            if (p.coord - wpos).magnitude < .001:
-                return p.centroidHeight
-        return 0
+    def getCentroidHeight(self, wpos, terrain_origin, world_shape_type):
+#        print("getCentroidHeight(")
+        if world_shape_type == 'FLAT':
+            down = -vecZ
+            wpos_parallel = wpos.project(down)
+            wpos_perp = wpos_parallel - wpos
+            
+            centroidHeight = 0
+            count = 0
+                        
+            for p in self.points:
+                coord_parallel = p.coord.project(down)
+                coord_perp = coord_parallel - p.coord
+                
+#                print ("coord_perp - wpos_perp " + str(coord_perp - wpos_perp))
+                
+                if (coord_perp - wpos_perp).magnitude < .001:
+                    centroidHeight += p.centroidHeight
+                    count += 1
+                    #return p.centroidHeight
+                    
+            if count >= 1:
+                return centroidHeight / count
+            return 0
+        else:        
+            #This currently does not take into account meshes that meet at seams
+            for p in self.points:
+                if (p.coord - wpos).magnitude < .001:
+                    return p.centroidHeight
+            return 0
     
         
     
@@ -678,9 +703,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         if start_stroke:
             self.start_height = hit_offset.dot(vecZ)
 
-        smoothing_map = []
         if brush_type == 'SMOOTH':
             #Calculate relaxed location for each relevant point
+
+            smoothing_info = SmoothingInfo()
             
             for obj in context.scene.objects:
                 if not obj.select_get():
@@ -703,11 +729,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 elif obj.mode == 'OBJECT':
                     bm = bmesh.new()
                     bm.from_mesh(mesh)
-
-                smoothing_info = SmoothingInfo()
             
                 for v in bm.verts:
-###################################
                     wpos = l2w @ v.co
                     
                     offset_from_origin, down = self.calc_offset_from_origin(wpos, terrain_origin, world_shape_type)
@@ -728,11 +751,11 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     if dist < brush_radius:
                         centroidHeight = 0
                         count = 0
-                        print("Smoothing Vertex #" + str(v.index))
+#                        print("Smoothing Vertex #" + str(v.index))
                     
                         for e in v.link_edges:
                             v1 = e.other_vert(v)
-                            print("linked edge #" + str(v1.index))
+#                            print("linked edge #" + str(v1.index))
                             
                             v1Wpos = l2w @ v1.co 
                             offset_from_originP, downP = self.calc_offset_from_origin(v1Wpos, terrain_origin, world_shape_type)
@@ -914,7 +937,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         elif brush_type == 'LEVEL':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
                         elif brush_type == 'SMOOTH':
-                            centroid_height = smoothing_info.getCentroidHeight(wpos)
+                            centroid_height = smoothing_info.getCentroidHeight(wpos, terrain_origin, world_shape_type)
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, centroid_height, atten)
 #                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
                         elif brush_type == 'SLOPE':
