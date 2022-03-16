@@ -475,6 +475,27 @@ def draw_callback(self, context):
 
     bgl.glDisable(bgl.GL_DEPTH_TEST)
 
+#-------------------------------------
+
+class SmoothingPointInfo:
+    def __init__(self, coord, height):
+        self.coord = coord
+        self.centroidHeight = height
+
+class SmoothingInfo:
+    def __init__(self):
+        self.points = []
+        
+    def addPoint(self, wpos, height):
+        self.points.append(SmoothingPointInfo(wpos, height))
+        
+    def getCentroidHeight(self, wpos):
+        for p in self.points:
+            if (p.coord - wpos).magnitude < .001:
+                return p.centroidHeight
+        return 0
+    
+        
     
 #-------------------------------------
 
@@ -589,6 +610,16 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
     def stroke_falloff(self, x):
 #        return 1 - x * x
         return -x * x + 2 * x
+        
+    def calc_offset_from_origin(self, wpos, terrain_origin, world_shape_type):
+        offset_from_origin = wpos - terrain_origin
+        if world_shape_type == 'FLAT':
+            offset_from_origin = offset_from_origin.project(vecZ)
+            down = -vecZ
+        else:
+            down = -offset_from_origin.normalized()
+                        
+        return (offset_from_origin, down)
 
     def dab_brush(self, context, event, start_stroke = False):
         mouse_pos = (event.mouse_region_x, event.mouse_region_y)
@@ -647,7 +678,79 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         if start_stroke:
             self.start_height = hit_offset.dot(vecZ)
 
-        if brush_type == 'SMOOTH' or brush_type == 'SLOPE':
+        smoothing_map = []
+        if brush_type == 'SMOOTH':
+            #Calculate relaxed location for each relevant point
+            
+            for obj in context.scene.objects:
+                if not obj.select_get():
+                    continue
+
+                if obj.type != 'MESH':
+                    continue
+                    
+                l2w = obj.matrix_world
+            
+                #Bounding box check
+                bounds = mesh_bounds_fast(obj)
+                bbox_check = bounds.intersect_with_ray(location, hit_down, brush_radius, l2w)
+                if not bbox_check:
+                    continue
+                
+                mesh = obj.data
+                if obj.mode == 'EDIT':
+                    bm = bmesh.from_edit_mesh(mesh)
+                elif obj.mode == 'OBJECT':
+                    bm = bmesh.new()
+                    bm.from_mesh(mesh)
+
+                smoothing_info = SmoothingInfo()
+            
+                for v in bm.verts:
+###################################
+                    wpos = l2w @ v.co
+                    
+                    offset_from_origin, down = self.calc_offset_from_origin(wpos, terrain_origin, world_shape_type)
+                    
+                    # offset_from_origin = wpos - terrain_origin
+                    # if world_shape_type == 'FLAT':
+    # #                            print("world_shape_type " + str(world_shape_type))
+                        # offset_from_origin = offset_from_origin.project(vecZ)
+                        # down = -vecZ
+                    # else:
+                        # down = -offset_from_origin.normalized()
+                        
+                    offset = wpos - location
+                    offset_parallel = offset.project(down)
+                    offset_perp = offset - offset_parallel
+                        
+                    dist = offset_perp.magnitude
+                    if dist < brush_radius:
+                        centroidHeight = 0
+                        count = 0
+                        print("Smoothing Vertex #" + str(v.index))
+                    
+                        for e in v.link_edges:
+                            v1 = e.other_vert(v)
+                            print("linked edge #" + str(v1.index))
+                            
+                            v1Wpos = l2w @ v1.co 
+                            offset_from_originP, downP = self.calc_offset_from_origin(v1Wpos, terrain_origin, world_shape_type)
+                            #offset_parallel = offset.project(down)
+                            
+                            centroidHeight += offset_from_originP.magnitude
+                            count += 1
+                            #offset = (v1Wpos - wpos).normalized()
+                            
+                        centroidHeight /= count
+                        smoothing_info.addPoint(wpos, centroidHeight)
+                    
+                    
+                if obj.mode == 'OBJECT':
+                    bm.free()
+
+#        if brush_type == 'SMOOTH' or brush_type == 'SLOPE':
+        if brush_type == 'SLOPE':
             weight_sum = 0
             weighted_len_sum = 0
                 
@@ -695,17 +798,17 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     if dist < brush_radius:
                         if brush_type == 'SLOPE':
                             smooth_points.append(wpos)
-                        elif brush_type == 'SMOOTH':
-                            frac = dist / brush_radius
-                            atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
-                            atten *= atten
+                        # elif brush_type == 'SMOOTH':
+                            # frac = dist / brush_radius
+                            # atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
+                            # atten *= atten
                             
-                            len = offset_from_origin.magnitude
-                            if offset_from_origin.dot(down) > 0:
-                                len = -len
+                            # len = offset_from_origin.magnitude
+                            # if offset_from_origin.dot(down) > 0:
+                                # len = -len
                                 
-                            weight_sum += atten
-                            weighted_len_sum += len * atten
+                            # weight_sum += atten
+                            # weighted_len_sum += len * atten
 
                 if obj.mode == 'OBJECT':
                     bm.free()
@@ -713,10 +816,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             if brush_type == 'SLOPE':
                 smooth_valid, smooth_plane_pos, smooth_plane_norm = fit_points_to_plane(smooth_points)
                 
-            elif brush_type == 'SMOOTH':
-                if weight_sum == 0:
-                    return
-                smooth_height = weighted_len_sum / weight_sum
+            # elif brush_type == 'SMOOTH':
+                # if weight_sum == 0:
+                    # return
+                # smooth_height = weighted_len_sum / weight_sum
 
 
 
@@ -811,7 +914,9 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                         elif brush_type == 'LEVEL':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
                         elif brush_type == 'SMOOTH':
-                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
+                            centroid_height = smoothing_info.getCentroidHeight(wpos)
+                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, centroid_height, atten)
+#                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
                         elif brush_type == 'SLOPE':
                             if smooth_valid:
                                 s = isect_line_plane(wpos, down, smooth_plane_pos, smooth_plane_norm)
@@ -842,7 +947,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
         viewlayer = bpy.context.view_layer
-#        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
         result, location, normal, face_index, object, matrix = pick_object(ray_origin, view_vector)
         
         if not result or object.select_get() == False or object.type != 'MESH':
@@ -855,8 +959,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         world_shape_type = props.world_shape_type
         terrain_origin_obj = props.terrain_origin
 
-#        print("======")
-    
         terrain_origin = vecZero.copy()
         if terrain_origin_obj != None:
             terrain_origin = terrain_origin_obj.matrix_world.translation
@@ -865,9 +967,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ramp_start = self.start_location
         ramp_span = location - self.start_location
     
-        # if self.edit_object == None:
-            # self.edit_object = object
-        
         l2w = object.matrix_world
         w2l = l2w.inverted()
 
@@ -889,13 +988,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
         
-        # mesh = object.data
-        # if object.mode == 'EDIT':
-            # bm = bmesh.from_edit_mesh(mesh)
-        # elif object.mode == 'OBJECT':
-            # bm = bmesh.new()
-            # bm.from_mesh(mesh)
-
             
             for v in bm.verts:
                 wpos = l2w @ v.co
@@ -927,33 +1019,14 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     attenParallel = 1
                     if vert_parallel_len < falloff_span:
                         attenParallel = vert_parallel_len / falloff_span
-                        
-                    # if frac < ramp_falloff:
-                        # attenParallel = frac / ramp_falloff
-                    # elif frac > 1 - ramp_falloff:
-                        # attenParallel = (1 - frac) / ramp_falloff
-                        
                     
                     vert_perp_frac = vert_binormal.length / ramp_width
                     attenPerp = 1 if vert_perp_frac < (1 - ramp_falloff) else (1 - vert_perp_frac) / ramp_falloff
                         
                             
-                    # len = offset_from_origin.magnitude
-                    # if offset_from_origin.dot(down) > 0:
-                        # len = -len
                     s = closest_point_to_line(wpos, down, ramp_start, ramp_span)
                     clamped_to_ramp = wpos + down * s
                     newWpos = lerp(wpos, clamped_to_ramp, strength_ramp * attenParallel * attenPerp)
-
-                    ##############################
-                    # print(" _ ")
-                    # print ("wpos " + str(wpos))
-                    # print ("clamped_to_ramp " + str(clamped_to_ramp))
-                    # print ("down " + str(down))
-                    # print ("s " + str(s))
-                    # print ("newWpos " + str(newWpos))
-                    
-                    ##############################
                 
                     v.co = w2l @ newWpos
                 
@@ -991,7 +1064,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             self.show_cursor = False
             return
             
-        context.window.cursor_set("DEFAULT")
+        context.window.cursor_set("PAINT_BRUSH")
         
         #Brush cursor display
         if result:
@@ -1079,6 +1152,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             return {'PASS_THROUGH'}
         
         elif event.type == 'MOUSEMOVE':
+            #context.window.cursor_set("PAINT_BRUSH")
             self.mouse_move(context, event)
             
             if self.dragging:
@@ -1108,6 +1182,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
                 self.history_clear(context)
+                bpy.context.window.cursor_set("DEFAULT")
                 return {'FINISHED'}
             return {'RUNNING_MODAL'}
 
@@ -1194,6 +1269,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 bpy.types.SpaceView3D.draw_handler_remove(self._handle_viewport, 'WINDOW')
                 self.history_restore_bookmark(context, 0)
                 self.history_clear(context)            
+                bpy.context.window.cursor_set("DEFAULT")
                 return {'CANCELLED'}
             return {'RUNNING_MODAL'}
 
@@ -1210,6 +1286,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             args = (self, context)
             self._handle = bpy.types.SpaceView3D.draw_handler_add(draw_callback, args, 'WINDOW', 'POST_VIEW')
             self._handle_viewport = bpy.types.SpaceView3D.draw_handler_add(draw_viewport_callback, args, 'WINDOW', 'POST_PIXEL')
+
+            bpy.context.window.cursor_set("PAINT_BRUSH")
 
             redraw_all_viewports(context)
             self.history_clear(context)
