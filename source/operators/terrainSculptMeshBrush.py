@@ -132,6 +132,14 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         soft_max = 100
     )
 
+    smooth_edge_snap_distance : bpy.props.FloatProperty(
+        name = "Smooth Snap Distance", 
+        description = "When using the smooth tool with more than one mesh selected, this determines whether vertices in the different meshes are treated as if they're the same vertex.  That is, if the two vertices are less than this distance apart when looking in the 'down' direction, they are treated as if they are connected.", 
+        default = .001, 
+        min = 0,
+        soft_max = .1
+    )
+
     ramp_width : bpy.props.FloatProperty(
         name = "Ramp Width", 
         description = "The width of the ramp.", 
@@ -489,8 +497,9 @@ class SmoothingInfo:
     def addPoint(self, wpos, height):
         self.points.append(SmoothingPointInfo(wpos, height))
         
-    def getCentroidHeight(self, wpos, terrain_origin, world_shape_type):
-#        print("getCentroidHeight(")
+    def getCentroidHeight(self, wpos, terrain_origin, world_shape_type, smooth_edge_snap_distance):
+    #########
+#        print("getCentroidHeight( wpos " + str(wpos))
         if world_shape_type == 'FLAT':
             down = -vecZ
             wpos_parallel = wpos.project(down)
@@ -498,19 +507,23 @@ class SmoothingInfo:
             
             centroidHeight = 0
             count = 0
+            
                         
             for p in self.points:
                 coord_parallel = p.coord.project(down)
                 coord_perp = coord_parallel - p.coord
                 
+#                print ("coord_perp " + str(coord_perp))
 #                print ("coord_perp - wpos_perp " + str(coord_perp - wpos_perp))
                 
-                if (coord_perp - wpos_perp).magnitude < .001:
+                if (coord_perp - wpos_perp).magnitude < smooth_edge_snap_distance:
+ #                   print ("p.centroidHeight " + str(p.centroidHeight))
                     centroidHeight += p.centroidHeight
                     count += 1
                     #return p.centroidHeight
                     
             if count >= 1:
+#                print ("centroidHeight / count " + str(centroidHeight / count))
                 return centroidHeight / count
             return 0
         else:        
@@ -682,6 +695,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         add_amount = props.add_amount
         ramp_width = props.ramp_width
         terrain_origin_obj = props.terrain_origin
+        smooth_edge_snap_distance = props.smooth_edge_snap_distance
     
     
         terrain_origin = vecZero.copy()
@@ -760,14 +774,20 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             v1Wpos = l2w @ v1.co 
                             offset_from_originP, downP = self.calc_offset_from_origin(v1Wpos, terrain_origin, world_shape_type)
                             #offset_parallel = offset.project(down)
+
+#                            print("offset_from_originP.magnitude " + str(offset_from_originP.magnitude))
                             
-                            centroidHeight += offset_from_originP.magnitude
+                            offset = offset_from_originP.magnitude
+                            if offset_from_originP.dot(downP) < 0:
+                                offset = -offset
+                            centroidHeight += offset
                             count += 1
                             #offset = (v1Wpos - wpos).normalized()
                             
                         centroidHeight /= count
                         smoothing_info.addPoint(wpos, centroidHeight)
                     
+#                        print("centroidHeight " + str(centroidHeight))
                     
                 if obj.mode == 'OBJECT':
                     bm.free()
@@ -821,17 +841,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     if dist < brush_radius:
                         if brush_type == 'SLOPE':
                             smooth_points.append(wpos)
-                        # elif brush_type == 'SMOOTH':
-                            # frac = dist / brush_radius
-                            # atten = 1 if frac <= inner_radius else (1 - frac) / (1 - inner_radius)
-                            # atten *= atten
-                            
-                            # len = offset_from_origin.magnitude
-                            # if offset_from_origin.dot(down) > 0:
-                                # len = -len
-                                
-                            # weight_sum += atten
-                            # weighted_len_sum += len * atten
 
                 if obj.mode == 'OBJECT':
                     bm.free()
@@ -839,10 +848,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             if brush_type == 'SLOPE':
                 smooth_valid, smooth_plane_pos, smooth_plane_norm = fit_points_to_plane(smooth_points)
                 
-            # elif brush_type == 'SMOOTH':
-                # if weight_sum == 0:
-                    # return
-                # smooth_height = weighted_len_sum / weight_sum
 
 
 
@@ -936,9 +941,12 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             new_offset = (wpos - offset_from_origin) + -down * (len - adjust)
                         elif brush_type == 'LEVEL':
                             new_offset = (wpos - offset_from_origin) + -down * lerp(len, self.start_height, atten)
-                        elif brush_type == 'SMOOTH':
-                            centroid_height = smoothing_info.getCentroidHeight(wpos, terrain_origin, world_shape_type)
-                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, centroid_height, atten)
+                        elif brush_type == 'SMOOTH':                        
+                            centroid_height = smoothing_info.getCentroidHeight(wpos, terrain_origin, world_shape_type, smooth_edge_snap_distance)
+                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, -centroid_height, atten)
+                            # print("Applying smooth dab")
+                            # print("len " + str(len))
+                            # print("centroid_height " + str(centroid_height))
 #                            new_offset = (wpos - offset_from_origin) + -down * lerp(len, smooth_height, atten)
                         elif brush_type == 'SLOPE':
                             if smooth_valid:
@@ -1436,6 +1444,9 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         
         if props.brush_type == 'ADD' or props.brush_type == 'SUBTRACT':
             col.prop(props, "add_amount")
+        
+        if props.brush_type == 'SMOOTH':
+            col.prop(props, "smooth_edge_snap_distance")            
         
         if props.brush_type == 'RAMP':
             col.prop(props, "ramp_width")
