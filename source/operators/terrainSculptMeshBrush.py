@@ -24,8 +24,10 @@ import math
 import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
+from .Common import *
 from .SmoothingInfo import *
 from .TerrainSculptMeshProperties import *
+from .TerrainHeightPickerMeshOperator import *
 
 from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
@@ -55,159 +57,10 @@ brush_radius_increment = .9
 
 #--------------------------------------
 
-class TerrainSculptMeshWindow(Window):
-    def __init__(self):
-        super().__init__()
-#        self.background_color = mathutils.Vector((.9, .5, .5, 1))
-        self.set_title("Terrain Sculpt Properties")
-        panel = self.get_main_panel()
-        
-        main_layout = LayoutBox(axis = Axis.Y)
-        panel.set_layout(main_layout)
-
-        
-        self.rad_panel = Panel()
-        main_layout.add_child(self.rad_panel)
-        rad_panel_layout = LayoutBox(Axis.X)
-        self.rad_panel.set_layout(rad_panel_layout)
-        self.radius_label = Label("Radius: ")
-        rad_panel_layout.add_child(self.radius_label)
-        self.radius_data = TextInput("0")
-        rad_panel_layout.add_child(self.radius_data)
-#        self.radius_data.set_background_color(Vector((.7, .7, .7, 1)))
-#        self.radius_data.set_border_radius(4)
-        self.radius_data.set_expansion_x(ExpansionType.EXPAND)
-#        self.radius_data.set_align_x(AlignX.RIGHT)
-        
-        
-        self.layout.layout_components(self.bounds())
-        
-        self.layout.dump()
-
-    def draw(self, context):
-#        props = context.scene.terrain_sculpt_mesh_brush_props
-        props = context.scene.terrain_sculpt_mesh_brush_props
-        brush_radius = props.radius
-
-        text = "{:.3f}".format(brush_radius)
-        self.radius_data.text = text
-
-        super().draw(context)
-        
 
 
 
 #--------------------------------------
-        
-def pick_object(ray_origin, ray_direction):
-    hit_object = False
-    best_loc = None
-    best_normal = None
-    best_face_idx = None
-    best_obj = None
-    best_matrix = None
-    best_dist_sq = 0
-    
-    for obj in bpy.context.selected_objects:
-        if obj.hide_select:
-            continue
-            
-        l2w = obj.matrix_world
-        w2l = l2w.inverted()
-        n2w = w2l.transposed() #normal transform
-        l_origin = w2l @ ray_origin
-        l_offPt = w2l @ (ray_origin + ray_direction)
-        l_direction = l_offPt - l_origin
-
-        #print("testing " + obj.name + " orig " + str(ray_origin) + " dir " + str(ray_direction))
-            
-        success, location, normal, poly_index = obj.ray_cast(l_origin, l_direction)
-        if not success:
-            continue
-
-        #print("hit " + obj.name)
-                
-        dist_sq = (location - l_origin).length_squared
-        
-        if not hit_object or dist_sq < best_dist_sq:
-            hit_object = True
-            best_loc = l2w @ location
-            best_normal = (n2w @ normal).normalized()
-            best_face_idx = poly_index
-            best_obj = obj
-            best_matrix = l2w
-            best_dist_sq = dist_sq
-        
-    return (hit_object, best_loc, best_normal, best_face_idx, best_obj, best_matrix)
-
-#--------------------------------------
-
-def pick_height(context, event):
-    mouse_pos = (event.mouse_region_x, event.mouse_region_y)
-
-    ctx = bpy.context
-
-    region = context.region
-    rv3d = context.region_data
-
-    view_vector = view3d_utils.region_2d_to_vector_3d(region, rv3d, mouse_pos)
-    ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
-
-
-    viewlayer = bpy.context.view_layer
-    #result, location, normal, index, object, matrix = ray_cast(context, viewlayer, ray_origin, view_vector)
-
-#    hit_object, location, normal, face_index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
-    hit_object, location, normal, face_index, object, matrix = pick_object(ray_origin, view_vector)
-    
-    if hit_object:
-        #object.matrix_world @ 
-        props = context.scene.terrain_sculpt_mesh_brush_props
-        terrain_origin_obj = props.terrain_origin
-        world_shape_type = props.world_shape_type
-    
-        terrain_origin = vecZero.copy()
-        if terrain_origin_obj != None:
-            terrain_origin = terrain_origin_obj.matrix_world.translation
-        
-        
-        offset = location - terrain_origin
-        down = -offset
-        
-        if world_shape_type == 'FLAT':
-            offset = offset.project(vecZ)
-            down = -vecZ
-            
-        len = offset.magnitude
-        if offset.dot(down) > 0:
-            len = -len
-    
-        context.scene.terrain_sculpt_mesh_brush_props.draw_height = len
-    
-    
-        context.scene.terrain_sculpt_mesh_brush_props.normal = normal
-        redraw_all_viewports(context)
-
-
-#Find matrix that will rotate Z axis to point along normal
-#coord - point in world space
-#normal - normal in world space
-def calc_vertex_transform_world(pos, norm):
-    axis = norm.cross(vecZ)
-    if axis.length_squared < .0001:
-        axis = mathutils.Vector(vecX)
-    else:
-        axis.normalize()
-    angle = -math.acos(norm.dot(vecZ))
-    
-    quat = mathutils.Quaternion(axis, angle)
-    mR = quat.to_matrix()
-    mR.resize_4x4()
-    
-    mT = mathutils.Matrix.Translation(pos)
-
-    m = mT @ mR
-    return m
 
 
 
@@ -379,8 +232,6 @@ def draw_callback(self, context):
 
     bgl.glDisable(bgl.GL_DEPTH_TEST)
 
-#-------------------------------------
-
     
 #-------------------------------------
 
@@ -402,8 +253,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         self.history_idx = -1
         self.history_limit = 10
         self.history_bookmarks = {}
-        
-#        self.window = TerrainSculptMeshWindow()
 
         
     def free_snapshot(self, map):
@@ -1182,54 +1031,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             
             
 #---------------------------
-
-class TerrainHeightPickerMeshOperator(bpy.types.Operator):
-    """Pick Terrain Height"""
-    bl_idname = "kitfox.terrain_height_picker_mesh"
-    bl_label = "Pick Normal"
-    bl_options = {"REGISTER", "UNDO"}
-    
-    def __init__(self):
-        self.picking = False
-
-    def modal(self, context, event):
-        if event.type == 'MOUSEMOVE':
-            if self.picking:
-                context.window.cursor_set("EYEDROPPER")
-            else:
-                context.window.cursor_set("DEFAULT")
-            return {'PASS_THROUGH'}
-
-        elif event.type == 'LEFTMOUSE':
-            self.picking = False
-#            self.mouse_down(context, event)
-            pick_height(context, event)
-            context.window.cursor_set("DEFAULT")
-            return {'FINISHED'}
-
-        elif event.type in {'RIGHTMOUSE', 'ESC'}:
-            self.picking = False
-#            print("pick target object cancelled")
-            context.window.cursor_set("DEFAULT")
-            return {'CANCELLED'}
-        else:
-            return {'PASS_THROUGH'}
-
-    def invoke(self, context, event):
-        if context.area.type == 'VIEW_3D':
-
-            args = (self, context)
-            self._context = context
-
-            context.window_manager.modal_handler_add(self)
-            
-            context.window.cursor_set("EYEDROPPER")
-            self.picking = True
-            
-            return {'RUNNING_MODAL'}
-        else:
-            self.report({'WARNING'}, "View3D not found, cannot run operator")
-            return {'CANCELLED'}
 
  
 #---------------------------
