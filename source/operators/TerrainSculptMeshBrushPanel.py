@@ -110,9 +110,9 @@ def register():
     bpy.utils.register_class(TerrainSculptMeshOperator)
     bpy.utils.register_class(TerrainHeightPickerMeshOperator)
     bpy.utils.register_class(TerrainSculptMeshBrushPanel)
-    bpy.utils.register_class(EchoToolOperator)
-    
-    bpy.utils.register_tool(TerrainSculptWorkspaceTool, after={"builtin.scale_cage"}, separator=True, group=True)
+
+#    bpy.utils.register_class(EchoToolOperator)    
+#    bpy.utils.register_tool(TerrainSculptWorkspaceTool, after={"builtin.scale_cage"}, separator=True, group=True)
     
     bpy.types.Scene.terrain_sculpt_mesh_brush_props = bpy.props.PointerProperty(type=TerrainSculptMeshProperties)
 
@@ -121,9 +121,9 @@ def unregister():
     bpy.utils.unregister_class(TerrainSculptMeshOperator)
     bpy.utils.unregister_class(TerrainHeightPickerMeshOperator)
     bpy.utils.unregister_class(TerrainSculptMeshBrushPanel)
-    bpy.utils.unregister_class(EchoToolOperator)
 
-    bpy.utils.unregister_tool(TerrainSculptWorkspaceTool)
+#    bpy.utils.unregister_class(EchoToolOperator)
+#    bpy.utils.unregister_tool(TerrainSculptWorkspaceTool)
     
     del bpy.types.Scene.terrain_sculpt_mesh_brush_props
 

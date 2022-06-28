@@ -91,13 +91,15 @@ class EchoToolOperator(bpy.types.Operator):
             EchoToolOperator.is_running = False
             return {'CANCELED'}
 
-        return {'PASS_THROUGH'}
+        return {'RUNNING_MODAL'}
+#        return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
         print("invoke evTyp:%s evVal:%s mode:%s" % (str(event.type), str(event.value), self.tool_mode))
 
         # if EchoToolOperator.is_running:
         #     return {'CANCELLED'}
+        context.window_manager.modal_handler_add(self)
 
         EchoToolOperator.is_running = True
 
