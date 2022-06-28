@@ -31,12 +31,12 @@ import importlib
 
 
 if "bpy" in locals():
-    if "TerrainSculptMeshBrush" in locals():
+    if "TerrainSculptMeshBrushPanel" in locals():
 #        importlib.reload(TerrainSculptMeshProperties)
-        importlib.reload(TerrainSculptMeshBrush)
+        importlib.reload(TerrainSculptMeshBrushPanel)
     else:
 #        from .operators import TerrainSculptMeshProperties
-        from .operators import TerrainSculptMeshBrush
+        from .operators import TerrainSculptMeshBrushPanel
         
     # if "terrainSculptMeshPanel" in locals():
         # importlib.reload(terrainSculptMeshPanel)
@@ -45,17 +45,17 @@ if "bpy" in locals():
         
 else:
 #    from .operators import TerrainSculptMeshProperties
-    from .operators import TerrainSculptMeshBrush
+    from .operators import TerrainSculptMeshBrushPanel
     # from .operators import terrainSculptMeshPanel
 
 def register():
 #    TerrainSculptMeshProperties.register()
-    TerrainSculptMeshBrush.register()
+    TerrainSculptMeshBrushPanel.register()
     # terrainSculptMeshPanel.register()
 
 
 def unregister():
 #    TerrainSculptMeshProperties.unregister()
-    TerrainSculptMeshBrush.unregister()
+    TerrainSculptMeshBrushPanel.unregister()
     # terrainSculptMeshPanel.unregister()
 
