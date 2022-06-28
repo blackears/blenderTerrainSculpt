@@ -24,6 +24,8 @@ import math
 import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
+from .SmoothingInfo import *
+from .TerrainSculptMeshProperties import *
 
 from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
@@ -49,112 +51,6 @@ brush_radius_increment = .9
 
 #--------------------------------------
 
-class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
-    
-    radius : bpy.props.FloatProperty(
-        name = "Radius", 
-        description = "Radius of brush.  Use [, ] keys to adjust.", 
-        default = 1, 
-        min = 0, 
-        soft_max = 4
-    )
-    
-    inner_radius : bpy.props.FloatProperty(
-        name = "Inner Radius", 
-        description = "Inner Radius of brush.  Used for hardness of brush edge.  Use Shift plus [, ] keys to adjust.", 
-        default = 0, 
-        min = 0, 
-        max = 1
-    )
-
-    strength : bpy.props.FloatProperty(
-        name = "Strength", 
-        description = "Strength of brush.", 
-        default = 1, 
-        min = 0,
-        max = 1
-    )
-
-    strength_ramp : bpy.props.FloatProperty(
-        name = "Ramp Strength", 
-        description = "Strength for ramp tool.", 
-        default = 1, 
-        min = 0,
-        soft_max = 1
-    )
-
-    use_pressure : bpy.props.BoolProperty(
-        name = "Pen Pressure", 
-        description = "If true, pen pressure is used to adjust strength.", 
-        default = False
-    )
-
-    terrain_origin : bpy.props.PointerProperty(
-        name = "Terrain Origin", 
-        description = "Defines the origin point for modes that depend on a distance from the origin.  World origin used if not set.", 
-        type = bpy.types.Object
-    )
-
-    brush_type : bpy.props.EnumProperty(
-        items=(
-            ('DRAW', "Draw (D)", "Draw terrain at the given height above the origin."),
-            ('LEVEL', "Level (L)", "Make terrain the same height as the spot where you first place your brush."),
-            ('ADD', "Add (A)", "Add to terrain height."),
-            ('SUBTRACT', "Subtract (S)", "Subtract from terrain height."),
-            ('SLOPE', "Slope (P)", "Use the slope of the surface under the brush to set height."),
-            ('SMOOTH', "Smooth (M)", "Average out the terrain under the brush."),
-            ('RAMP', "Ramp (R)", "Draw a ramp between where you press and release the mouse."),
-        ),
-        default='DRAW'
-    )
-
-    world_shape_type : bpy.props.EnumProperty(
-        items=(
-            ('FLAT', "Flat", "Terrain is flat and gravity points along -Z."),
-            ('SPHERE', "Sphere", "Terrain is sphere shaped (like a planet) and gravity points toward the origin."),
-        ),
-        default='FLAT'
-    )
-
-    draw_height : bpy.props.FloatProperty(
-        name = "Draw Height", 
-        description = "Distance above origin to draw terrain.  Use Up, Down arrow to adjust.", 
-        default = 1, 
-        soft_min = 0,
-        soft_max = 100
-    )
-
-    add_amount : bpy.props.FloatProperty(
-        name = "Add Amount", 
-        description = "Amount to add or subtract when those modes are used.", 
-        default = 1, 
-        soft_min = 0,
-        soft_max = 100
-    )
-
-    smooth_edge_snap_distance : bpy.props.FloatProperty(
-        name = "Smooth Snap Distance", 
-        description = "When using the smooth tool with more than one mesh selected, this determines whether vertices in the different meshes are treated as if they're the same vertex.  That is, if the two vertices are less than this distance apart when looking in the 'down' direction, they are treated as if they are connected.", 
-        default = .001, 
-        min = 0,
-        soft_max = .1
-    )
-
-    ramp_width : bpy.props.FloatProperty(
-        name = "Ramp Width", 
-        description = "The width of the ramp.", 
-        default = 1, 
-        min = 0,
-        soft_max = 10
-    )
-    
-    ramp_falloff : bpy.props.FloatProperty(
-        name = "Ramp Falloff", 
-        description = "Softness of the edge of the ramp.", 
-        default = .2, 
-        min = 0, 
-        max = 1
-    )
 
 
 #--------------------------------------
@@ -485,55 +381,6 @@ def draw_callback(self, context):
 
 #-------------------------------------
 
-class SmoothingPointInfo:
-    def __init__(self, coord, height):
-        self.coord = coord
-        self.centroidHeight = height
-
-class SmoothingInfo:
-    def __init__(self):
-        self.points = []
-        
-    def addPoint(self, wpos, height):
-        self.points.append(SmoothingPointInfo(wpos, height))
-        
-    def getCentroidHeight(self, wpos, terrain_origin, world_shape_type, smooth_edge_snap_distance):
-    #########
-#        print("getCentroidHeight( wpos " + str(wpos))
-        if world_shape_type == 'FLAT':
-            down = -vecZ
-            wpos_parallel = wpos.project(down)
-            wpos_perp = wpos_parallel - wpos
-            
-            centroidHeight = 0
-            count = 0
-            
-                        
-            for p in self.points:
-                coord_parallel = p.coord.project(down)
-                coord_perp = coord_parallel - p.coord
-                
-#                print ("coord_perp " + str(coord_perp))
-#                print ("coord_perp - wpos_perp " + str(coord_perp - wpos_perp))
-                
-                if (coord_perp - wpos_perp).magnitude < smooth_edge_snap_distance:
- #                   print ("p.centroidHeight " + str(p.centroidHeight))
-                    centroidHeight += p.centroidHeight
-                    count += 1
-                    #return p.centroidHeight
-                    
-            if count >= 1:
-#                print ("centroidHeight / count " + str(centroidHeight / count))
-                return centroidHeight / count
-            return 0
-        else:        
-            #This currently does not take into account meshes that meet at seams
-            for p in self.points:
-                if (p.coord - wpos).magnitude < .001:
-                    return p.centroidHeight
-            return 0
-    
-        
     
 #-------------------------------------
 
