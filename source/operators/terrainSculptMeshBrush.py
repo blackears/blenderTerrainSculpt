@@ -32,15 +32,6 @@ from .TerrainHeightPickerMeshOperator import *
 from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
 
-# import sys
-# sys.path.insert(0, '..')
-# import kitfox.gui.window
-from ..kitfox.gui.window import *
-from ..kitfox.gui.textInput import *
-
-# vecZ = mathutils.Vector((0, 0, 1))
-# vecX = mathutils.Vector((1, 0, 0))
-
 shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
 #batchLine = batch_for_shader(shader, 'LINES', {"pos": coordsNormal})
 batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
