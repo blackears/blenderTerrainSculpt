@@ -18,7 +18,7 @@ bl_info = {
     "name": "Terrain Sculpting Tools",
     "description": "Tools for creating and editing terrains.",
     "author": "Mark McKay",
-    "version": (1, 0, 3),
+    "version": (1, 0, 4),
     "blender": (2, 80, 0),
     "location": "View3D",
 #    "wiki_url": "https://github.com/blackears/uvTools",
