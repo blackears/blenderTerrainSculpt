@@ -622,7 +622,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                             if smooth_valid:
                                 s = isect_line_plane(wpos, down, smooth_plane_pos, smooth_plane_norm)
                                 target = wpos + s * down
-                                new_offset = Vector(lerp(wpos, target, atten))
+                                new_offset = mathutils.Vector(lerp(wpos, target, atten))
                             else:
                                 new_offset = wpos
 
