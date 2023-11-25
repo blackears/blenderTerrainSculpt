@@ -776,12 +776,7 @@ def fit_points_to_plane(points):
     #Centered points
     Pc = P - centroid
     
-    ones = np.ones(rows).reshape((rows, 1))
-    
-    # aa = P[:, 0:-1]
-    # A = np.hstack((aa, ones))
-    A = Pc[:, 0:-1]
-    
+    A = Pc[:, 0:-1]    
     b = P[:, -1]
     
     valid, C = least_squares_fit(A, b)
