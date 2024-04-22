@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# This file is part of the Kitfox Normal Brush distribution (https://github.com/blackears/blenderEasyFly).
+# This file is part of the Kitfox Normal Brush distribution (https://github.com/blackears/blenderTerrainSculpt).
 # Copyright (c) 2021 Mark McKay
 # 
 # This program is free software: you can redistribute it and/or modify  
@@ -21,7 +21,8 @@ import sys
 import getopt
 import platform
 
-projectName = 'terrainSculpt'
+projectName = 'terrainSculptTools'
+
 
 def copytree(src, dst):
     for item in os.listdir(src):
@@ -29,30 +30,39 @@ def copytree(src, dst):
         s = os.path.join(src, item)
         d = os.path.join(dst, item)
         if os.path.isdir(s):
-            os.mkdir(d)
+            if not os.path.exists(d):
+                os.mkdir(d)
             copytree(s, d)
         else:
             filename, extn = os.path.splitext(item)
             print ("file " + filename + " extn  " + extn)
-            if (extn != ".py" and extn != ".png" and extn != ".json"):
+            if (extn != ".py" and extn != ".png"):
                 continue
                 
             shutil.copy(s, d)
 
-def make(copyToBlenderAddons = False, createArchive = False):
+def make(copyToBlenderAddons = False, createArchive = False, rebuildLibs = False):
     
     blenderHome = None
     # platSys = platform.system()
     # if platSys == 'Windows':
         # appData = os.getenv('APPDATA')
-        # blenderHome = os.path.join(appData, "Blender Foundation/Blender/2.92")
+        # blenderHome = os.path.join(appData, "Blender Foundation/Blender/2.91")
         
     # elif platSys == 'Linux':
         # home = os.getenv('HOME')
-        # blenderHome = os.path.join(home, ".config/blender/2.92/")
+        # blenderHome = os.path.join(home, ".config/blender/2.91/")
 
 
     blenderHome = os.getenv('BLENDER_HOME')
+
+    #Rebuild library directory
+    if rebuildLibs:
+        if os.path.exists('lib'):
+            shutil.rmtree('lib')
+        os.mkdir('lib')
+        copytree("../blenderCommon/source", "lib")
+        
 
     #Create build directory
     curPath = os.getcwd()
@@ -61,7 +71,9 @@ def make(copyToBlenderAddons = False, createArchive = False):
     os.mkdir('build')
     os.mkdir('build/' + projectName)
 
-    copytree("source", "build/" + projectName);
+    copytree("source", "build/" + projectName)
+#    copytree("../blenderCommon/source", "build/" + projectName)
+    copytree("lib", "build/" + projectName)
 
     
     #Build addon zip file
@@ -90,12 +102,15 @@ def make(copyToBlenderAddons = False, createArchive = False):
 if __name__ == '__main__':
     copyToBlenderAddons = False
     createArchive = False
+    rebuildLibs = False
 
     for arg in sys.argv[1:]:
         if arg == "-a":
             createArchive = True
         if arg == "-b":
             copyToBlenderAddons = True
+        if arg == "-l":
+            rebuildLibs = True
 
-    make(copyToBlenderAddons, createArchive)
+    make(copyToBlenderAddons, createArchive, rebuildLibs)
             
