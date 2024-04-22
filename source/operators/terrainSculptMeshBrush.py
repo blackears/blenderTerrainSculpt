@@ -16,7 +16,7 @@
 import bpy
 import bpy.utils.previews
 import os
-import bgl
+#import bgl
 import blf
 import gpu
 import mathutils
@@ -32,7 +32,7 @@ from .TerrainHeightPickerMeshOperator import *
 from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
 
-shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
+shader = gpu.shader.from_builtin('UNIFORM_COLOR')
 #batchLine = batch_for_shader(shader, 'LINES', {"pos": coordsNormal})
 batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
 batchSquare = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsSquare_strip})
@@ -79,7 +79,7 @@ def draw_callback(self, context):
 
     shader.bind();
 
-    bgl.glEnable(bgl.GL_DEPTH_TEST)
+    #bgl.glEnable(bgl.GL_DEPTH_TEST)
 
     #Draw cursor
     if self.show_cursor:
@@ -204,7 +204,7 @@ def draw_callback(self, context):
             # gpu.matrix.pop()
 
 
-    bgl.glDisable(bgl.GL_DEPTH_TEST)
+    #bgl.glDisable(bgl.GL_DEPTH_TEST)
 
     
 #-------------------------------------
@@ -636,7 +636,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     bm.to_mesh(mesh)
                     bm.free()
                 
-                mesh.calc_normals()
+                #mesh.calc_normals_split()
 
 
     def draw_ramp(self, context, event):
@@ -738,7 +738,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 bm.to_mesh(mesh)
                 bm.free()
                 
-            mesh.calc_normals()
+            #mesh.calc_normals_split()
 
 
                     
