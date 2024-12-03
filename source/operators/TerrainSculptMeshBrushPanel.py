@@ -75,6 +75,7 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         
         col.prop(props, "radius")
         col.prop(props, "inner_radius")
+        col.prop(props, "radius_relative_to_view")
         if props.brush_type == 'RAMP':
             col.prop(props, "strength_ramp")
         else:
@@ -93,7 +94,12 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
             col.prop(props, "add_amount")
         
         if props.brush_type == 'SMOOTH':
-            col.prop(props, "smooth_edge_snap_distance")            
+            col.prop(props, "smooth_edge_snap_distance")
+        
+        if props.brush_type == 'SLOPE':
+            col.prop(props, "use_slope_angle")
+            if props.use_slope_angle:
+                col.prop(props, "slope_angle")
         
         if props.brush_type == 'RAMP':
             col.prop(props, "ramp_width")

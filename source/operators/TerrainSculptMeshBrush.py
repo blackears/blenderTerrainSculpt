@@ -43,7 +43,17 @@ brush_radius_increment = .9
 
 def draw_viewport_callback(self, context):
     pass
-    
+
+
+def find_area():
+    try:
+        for a in bpy.data.window_managers[0].windows[0].screen.areas:
+            if a.type == "VIEW_3D":
+                return a
+        return None
+    except:
+        return None
+
 def draw_circle(mCursor):    
     #Tangent to mesh
     gpu.matrix.push()
@@ -53,6 +63,24 @@ def draw_circle(mCursor):
     shader.uniform_float("color", (1, 0, 1, 1))
     batchCircle.draw(shader)
     gpu.matrix.pop()
+
+def get_adjust_brush_viewport_scale(self, radius_relative_to_view_scale):
+    area = find_area()
+    if area:
+        #RegionView3D
+        r3d = area.spaces[0].region_3d
+        proj_mat = r3d.window_matrix
+        
+        if r3d.is_perspective and self.cursor_pos:
+            cam_offset = self.cursor_pos - self.ray_origin
+            brush_scale = cam_offset.length * radius_relative_to_view_scale / proj_mat[1][1]
+            #print("self.cursor_pos ", self.cursor_pos, " self.ray_origin ", self.ray_origin, " brush_scale ", brush_scale)
+            # brush_radius = brush_radius * brush_scale
+            # inner_radius = inner_radius * brush_scale
+            return brush_scale
+    
+    return 1
+    
 
 def draw_callback(self, context):
     ctx = bpy.context
@@ -72,6 +100,8 @@ def draw_callback(self, context):
     draw_height = props.draw_height
     world_shape_type = props.world_shape_type
     terrain_origin_obj = props.terrain_origin
+    radius_relative_to_view = props.radius_relative_to_view
+    radius_relative_to_view_scale = props.radius_relative_to_view_scale
 
     terrain_origin = vecZero.copy()
     if terrain_origin_obj != None:
@@ -79,7 +109,12 @@ def draw_callback(self, context):
 
     shader.bind();
 
-    #bgl.glEnable(bgl.GL_DEPTH_TEST)
+#    print("draw_callback")
+
+    if radius_relative_to_view:
+        brush_scale = get_adjust_brush_viewport_scale(self, radius_relative_to_view_scale)
+        brush_radius = brush_radius * brush_scale
+        inner_radius = inner_radius * brush_scale
 
     #Draw cursor
     if self.show_cursor:
@@ -119,6 +154,23 @@ def draw_callback(self, context):
                     gpu.matrix.pop()
                     
         elif brush_type == 'DRAW':
+ #           print("drawing DRAW brush")
+                
+                # print("found radius check")
+                # area = find_area()
+                # if area:
+                    # #RegionView3D
+                    # r3d = area.spaces[0].region_3d
+                    # proj_mat = r3d.window_matrix
+                    
+                    # if r3d.is_perspective:
+                        # cam_offset = self.cursor_pos - self.ray_origin
+                        # brush_scale = cam_offset.length * radius_relative_to_view_scale / proj_mat[1][1]
+                        # #print("self.cursor_pos ", self.cursor_pos, " self.ray_origin ", self.ray_origin, " brush_scale ", brush_scale)
+                        # brush_radius = brush_radius * brush_scale
+                        # inner_radius = inner_radius * brush_scale
+                    
+                
         
             offset_from_origin = self.cursor_pos - terrain_origin
             if world_shape_type == 'FLAT':
@@ -129,11 +181,9 @@ def draw_callback(self, context):
                 down = -offset_from_origin.normalized()
                 
             draw_pos = self.cursor_pos - offset_from_origin - down * draw_height
-#            m = mathutils.Matrix.Translation(draw_pos)
             m = calc_vertex_transform_world(draw_pos, -down);
 
             draw_base_pos = self.cursor_pos - offset_from_origin
-#            mBase = mathutils.Matrix.Translation(draw_base_pos)
             mBase = calc_vertex_transform_world(draw_base_pos, -down);
             
             #outer
@@ -143,14 +193,6 @@ def draw_callback(self, context):
             draw_circle(mCursor)
             
             draw_circle(mBase @ mS)
-            #Tangent to mesh
-            # gpu.matrix.push()
-            
-            # gpu.matrix.multiply_matrix(mCursor)
-
-            # shader.uniform_float("color", (1, 0, 1, 1))
-            # batchCircle.draw(shader)
-            # gpu.matrix.pop()
 
             #inner
             mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
@@ -158,17 +200,9 @@ def draw_callback(self, context):
         
             draw_circle(mCursor)
             draw_circle(mBase @ mS)
-            #Tangent to mesh
-            # gpu.matrix.push()
-            
-            # gpu.matrix.multiply_matrix(mCursor)
-
-            # shader.uniform_float("color", (1, 0, 1, 1))
-            # batchCircle.draw(shader)
-            
-            # gpu.matrix.pop()
         
         else:
+            
             #Orient to mesh surface
             m = calc_vertex_transform_world(self.cursor_pos, self.cursor_normal);
             
@@ -177,15 +211,6 @@ def draw_callback(self, context):
             mCursor = m @ mS
 
             draw_circle(mCursor)
-        
-            #Tangent to mesh
-            # gpu.matrix.push()
-            
-            # gpu.matrix.multiply_matrix(mCursor)
-
-            # shader.uniform_float("color", (1, 0, 1, 1))
-            # batchCircle.draw(shader)
-            # gpu.matrix.pop()
 
             #inner
             mS = mathutils.Matrix.Scale(brush_radius * inner_radius, 4)
@@ -193,18 +218,13 @@ def draw_callback(self, context):
             
             draw_circle(mCursor)
         
-            #Tangent to mesh
-            # gpu.matrix.push()
-            
-            # gpu.matrix.multiply_matrix(mCursor)
 
-            # shader.uniform_float("color", (1, 0, 1, 1))
-            # batchCircle.draw(shader)
-            
-            # gpu.matrix.pop()
+def rotate_axis_angle(vector, axis, angle):
+    #Rodrigues' formula
+    sin_a = math.sin(angle)
+    cos_a = math.cos(angle)
+    return vector * cos_a + axis.cross(vector) * sin_a + axis * axis.dot(vector) * (1 - cos_a)
 
-
-    #bgl.glDisable(bgl.GL_DEPTH_TEST)
 
     
 #-------------------------------------
@@ -219,6 +239,7 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         self.dragging = False
         
         self.cursor_pos = None
+        self.ray_origin = None
         self.show_cursor = False
         self.edit_object = None
         self.stroke_trail = []
@@ -366,8 +387,16 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ramp_width = props.ramp_width
         terrain_origin_obj = props.terrain_origin
         smooth_edge_snap_distance = props.smooth_edge_snap_distance
+        radius_relative_to_view = props.radius_relative_to_view
+        radius_relative_to_view_scale = props.radius_relative_to_view_scale
+        slope_angle = props.slope_angle
+        use_slope_angle = props.use_slope_angle
     
-    
+        if radius_relative_to_view:
+            brush_scale = get_adjust_brush_viewport_scale(self, radius_relative_to_view_scale)
+            brush_radius = brush_radius * brush_scale
+            inner_radius = inner_radius * brush_scale
+
         terrain_origin = vecZero.copy()
         if terrain_origin_obj != None:
             terrain_origin = terrain_origin_obj.matrix_world.translation
@@ -462,7 +491,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                 if obj.mode == 'OBJECT':
                     bm.free()
 
-#        if brush_type == 'SMOOTH' or brush_type == 'SLOPE':
         if brush_type == 'SLOPE':
             weight_sum = 0
             weighted_len_sum = 0
@@ -516,10 +544,16 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
                     bm.free()
 
             if brush_type == 'SLOPE':
+                
                 smooth_valid, smooth_plane_pos, smooth_plane_norm = fit_points_to_plane(smooth_points)
                 
-
-
+                if use_slope_angle:
+                    #slope_angle
+                    up = mathutils.Vector((0, 0, 1))
+                    binorm = smooth_plane_norm.cross(up)
+                    binorm = binorm.normalized()
+                    #smooth_plane_norm = mathutils.Vector((0, 0, 1))
+                    smooth_plane_norm = rotate_axis_angle(up, binorm, slope_angle * math.pi / 180)
 
         
         for obj in context.scene.objects:
@@ -754,7 +788,6 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, mouse_pos)
 
         viewlayer = bpy.context.view_layer
-#        result, location, normal, index, object, matrix = ray_cast_scene(context, viewlayer, ray_origin, view_vector)
         result, location, normal, index, object, matrix = pick_object(ray_origin, view_vector)
 
         props = context.scene.terrain_sculpt_mesh_brush_props
@@ -766,14 +799,17 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
             return
             
         context.window.cursor_set("PAINT_BRUSH")
+        #print("MOSUE move")
         
         #Brush cursor display
         if result:
             self.show_cursor = True
             self.cursor_pos = location
+            self.ray_origin = ray_origin
             self.cursor_normal = normal
             self.cursor_object = object
             self.cursor_matrix = matrix
+            
         else:
             self.show_cursor = False
 
