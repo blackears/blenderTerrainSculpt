@@ -30,6 +30,10 @@ Radius of brush stroke.  You can press the **[** and **]** keys to change the ra
 #### Inner Radius
 Used to adjust the hardness of the brush.  The space between the outer and inner radius provides a falloff region for your stroke.  You can press the **Shift-[** and **Shift-]** keys to change the inner radius of the brush.
 
+#### Radius Relative to View
+
+When checked, the brush will automatically adjust it's size in proportion to how far away it is from the viewer, the same way the sculpting brushes do.  Otherwise, the brush will have a fixed size no matter how far from the camera the cursor is.
+
 #### Strength
 Multiplier for the strength of your brush stroke.
 
@@ -118,8 +122,13 @@ In Ramp mode, indicates how wide the ramp you are drawing will be.
 
 In Ramp mode, indicates how much rounding will be applied to the edges of your ramp.
 
- 
+#### Use Slope Angle
 
+By default, the slope tool will try to guess the slope by sampling the slope of the current area under the cursor.  If this is checked, you can specify a specific slope for the brush to draw at.  (The brush will still sample the area under the cursor to determine the directon the slope should face.)
+
+#### Slope Angle
+
+Angle the slope brush will draw at.
 
 ## Building
 
