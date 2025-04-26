@@ -14,10 +14,6 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
-import bpy.utils.previews
-import os
-#import bgl
-import blf
 import gpu
 import mathutils
 import math
@@ -33,7 +29,6 @@ from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
 
 shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-#batchLine = batch_for_shader(shader, 'LINES', {"pos": coordsNormal})
 batchCircle = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsCircle})
 batchSquare = batch_for_shader(shader, 'LINE_STRIP', {"pos": coordsSquare_strip})
 
@@ -235,7 +230,8 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
     bl_label = "UV Brush"
     bl_options = {"REGISTER", "UNDO"}
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.dragging = False
         
         self.cursor_pos = None
@@ -248,6 +244,10 @@ class TerrainSculptMeshOperator(bpy.types.Operator):
         self.history_idx = -1
         self.history_limit = 10
         self.history_bookmarks = {}
+
+    def __del__(self):
+#        print("End")
+        super().__del__()
 
         
     def free_snapshot(self, map):

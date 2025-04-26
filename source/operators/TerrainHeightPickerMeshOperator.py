@@ -14,14 +14,6 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
-import bpy.utils.previews
-import os
-import bgl
-import blf
-import gpu
-import mathutils
-import math
-import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
 from .Common import *
@@ -34,8 +26,13 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
     bl_label = "Pick Normal"
     bl_options = {"REGISTER", "UNDO"}
     
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.picking = False
+
+    def __del__(self):
+#        print("End")
+        super().__del__()
 
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
@@ -47,7 +44,6 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
 
         elif event.type == 'LEFTMOUSE':
             self.picking = False
-#            self.mouse_down(context, event)
             pick_height(context, event)
             context.window.cursor_set("DEFAULT")
             return {'FINISHED'}

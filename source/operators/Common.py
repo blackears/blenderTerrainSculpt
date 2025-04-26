@@ -14,14 +14,8 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
-import bpy.utils.previews
-import os
-import bgl
-import blf
-import gpu
 import mathutils
 import math
-import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
 

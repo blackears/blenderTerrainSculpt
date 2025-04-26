@@ -14,14 +14,6 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
-import bpy.utils.previews
-import os
-import bgl
-import blf
-import gpu
-import mathutils
-import math
-import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
 from .Common import *
@@ -42,20 +34,11 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Kitfox: Terrain"
-
-    # bl_label = "Terrain Sculpt Mesh Brush"
-    # bl_idname = "SCENE_PT_terrain_sculpt_mesh_brush"
-    # bl_space_type = 'PROPERTIES'
-    # bl_region_type = 'WINDOW'
-    # bl_context = "scene"
-#    bl_context = "world"
-    
         
 
     @classmethod
     def poll(cls, context):
         obj = context.object
-#        return obj != None and (obj.mode == 'EDIT' or obj.mode == 'OBJECT')
         return obj != None and (obj.mode == 'OBJECT')
         
     def draw(self, context):
@@ -64,14 +47,10 @@ class TerrainSculptMeshBrushPanel(bpy.types.Panel):
         scene = context.scene
         props = scene.terrain_sculpt_mesh_brush_props
         
-#        pcoll = preview_collections["main"]
-        
         #--------------------------------
         
         col = layout.column();
-        #col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Mesh Brush", icon_value = pcoll["uvBrush"].icon_id)
-        col.operator("kitfox.terrain_sculpt_mesh_brush_operator", text="Terrain Brush for Meshes")
-        
+        col.operator("kitfox.terrain_sculpt_mesh_brush_operator")
         
         col.prop(props, "radius")
         col.prop(props, "inner_radius")
@@ -117,9 +96,6 @@ def register():
     bpy.utils.register_class(TerrainHeightPickerMeshOperator)
     bpy.utils.register_class(TerrainSculptMeshBrushPanel)
 
-#    bpy.utils.register_class(EchoToolOperator)    
-#    bpy.utils.register_tool(TerrainSculptWorkspaceTool, after={"builtin.scale_cage"}, separator=True, group=True)
-    
     bpy.types.Scene.terrain_sculpt_mesh_brush_props = bpy.props.PointerProperty(type=TerrainSculptMeshProperties)
 
 def unregister():
@@ -128,9 +104,6 @@ def unregister():
     bpy.utils.unregister_class(TerrainHeightPickerMeshOperator)
     bpy.utils.unregister_class(TerrainSculptMeshBrushPanel)
 
-#    bpy.utils.unregister_class(EchoToolOperator)
-#    bpy.utils.unregister_tool(TerrainSculptWorkspaceTool)
-    
     del bpy.types.Scene.terrain_sculpt_mesh_brush_props
 
 

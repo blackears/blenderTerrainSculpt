@@ -82,6 +82,7 @@ class EchoToolOperator(bpy.types.Operator):
     #     return not EchoToolOperator.is_running
 
     def __init__(self):
+        super().__init__()
         self.picking = False
 
     def modal(self, context, event):

@@ -18,44 +18,31 @@ bl_info = {
     "name": "Terrain Sculpting Tools",
     "description": "Tools for creating and editing terrains.",
     "author": "Mark McKay",
-    "version": (1, 0, 8),
-    "blender": (4, 0, 0),
+    "version": (1, 0, 9),
+    "blender": (4, 4, 1),
     "location": "View3D",
 #    "wiki_url": "https://github.com/blackears/uvTools",
 #    "tracker_url": "https://github.com/blackears/uvTools",
     "category": "View 3D"
 }
 
-import bpy
 import importlib
 
 
 if "bpy" in locals():
     if "TerrainSculptMeshBrushPanel" in locals():
-#        importlib.reload(TerrainSculptMeshProperties)
         importlib.reload(TerrainSculptMeshBrushPanel)
     else:
-#        from .operators import TerrainSculptMeshProperties
         from .operators import TerrainSculptMeshBrushPanel
         
-    # if "terrainSculptMeshPanel" in locals():
-        # importlib.reload(terrainSculptMeshPanel)
-    # else:
-        # from .operators import terrainSculptMeshPanel
         
 else:
-#    from .operators import TerrainSculptMeshProperties
     from .operators import TerrainSculptMeshBrushPanel
-    # from .operators import terrainSculptMeshPanel
 
 def register():
-#    TerrainSculptMeshProperties.register()
     TerrainSculptMeshBrushPanel.register()
-    # terrainSculptMeshPanel.register()
 
 
 def unregister():
-#    TerrainSculptMeshProperties.unregister()
     TerrainSculptMeshBrushPanel.unregister()
-    # terrainSculptMeshPanel.unregister()
 
