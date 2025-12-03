@@ -15,13 +15,6 @@
 
 import bpy
 import bpy.utils.previews
-import os
-import bgl
-import blf
-import gpu
-import mathutils
-import math
-import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
 #from smoothingInfo import *
@@ -160,17 +153,3 @@ class TerrainSculptMeshProperties(bpy.types.PropertyGroup):
         min = 0, 
         max = 1
     )
-
-
-
-# def register():
-
-    # #Register tools
-    # bpy.utils.register_class(TerrainSculptMeshProperties)
-    
-    # bpy.types.Scene.terrain_sculpt_mesh_brush_props = bpy.props.PointerProperty(type=TerrainSculptMeshProperties)
-
-# def unregister():
-    # bpy.utils.unregister_class(TerrainSculptMeshProperties)
-    
-    # del bpy.types.Scene.terrain_sculpt_mesh_brush_props

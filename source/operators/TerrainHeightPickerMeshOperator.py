@@ -31,7 +31,6 @@ class TerrainHeightPickerMeshOperator(bpy.types.Operator):
         self.picking = False
 
     def __del__(self):
-#        print("End")
         super().__del__()
 
     def modal(self, context, event):

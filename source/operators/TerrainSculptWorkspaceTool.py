@@ -15,13 +15,6 @@
 
 import bpy
 import bpy.utils.previews
-import os
-import bgl
-import blf
-import gpu
-import mathutils
-import math
-import bmesh
 from ..kitfox.math.vecmath import *
 from ..kitfox.blenderUtil import *
 from .Common import *
@@ -66,23 +59,14 @@ class EchoToolOperator(bpy.types.Operator):
     
     is_running = False
 
-    # tool_mode : bpy.props.EnumProperty(
-    #     name="Tool Mode",
-    #     description="Tool Mode",
-    #     items=enum_tool_callback,
-    # )
-
     tool_mode : bpy.props.StringProperty(
         name="Tool Mode",
         description="Tool Mode",
     )
 
-    # @classmethod
-    # def poll( cls , context ) :
-    #     return not EchoToolOperator.is_running
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.picking = False
 
     def modal(self, context, event):
@@ -93,13 +77,10 @@ class EchoToolOperator(bpy.types.Operator):
             return {'CANCELED'}
 
         return {'RUNNING_MODAL'}
-#        return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
         print("invoke evTyp:%s evVal:%s mode:%s" % (str(event.type), str(event.value), self.tool_mode))
 
-        # if EchoToolOperator.is_running:
-        #     return {'CANCELLED'}
         context.window_manager.modal_handler_add(self)
 
         EchoToolOperator.is_running = True
